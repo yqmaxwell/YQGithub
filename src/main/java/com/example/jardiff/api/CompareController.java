@@ -1,0 +1,949 @@
+package com.example.jardiff.api;
+
+import com.example.jardiff.core.CompareOptions;
+import com.example.jardiff.core.CompareResult;
+import com.example.jardiff.core.CompareStore;
+import com.example.jardiff.core.DiffResult;
+import com.example.jardiff.core.DirectorySummaryResult;
+import com.example.jardiff.core.JarCompareService;
+import com.example.jardiff.core.JarDiffService;
+import com.example.jardiff.core.Stats;
+import com.example.jardiff.core.StoredCompare;
+import com.example.jardiff.core.TreeNode;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.Semaphore;
+import java.util.regex.Pattern;
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.multipart.MultipartFile;
+
+@RestController
+@RequestMapping("/api")
+public class CompareController {
+  private static final Logger log = LoggerFactory.getLogger(CompareController.class);
+  private static final Pattern PERCENT_ENCODED = Pattern.compile("%[0-9a-fA-F]{2}");
+  private final JarCompareService jarCompareService;
+  private final JarDiffService jarDiffService;
+  private final CompareStore compareStore;
+  private final int maxJarMb;
+  private final int maxDirFilesPerSide;
+  private final int maxDirMbPerSide;
+  private final int maxWarmupDiffs;
+  private final int defaultWarmupDiffs;
+
+  public CompareController(
+      JarCompareService jarCompareService,
+      JarDiffService jarDiffService,
+      CompareStore compareStore,
+      @Value("${jardiff.limits.max-jar-mb:512}") int maxJarMb,
+      @Value("${jardiff.limits.max-dir-files-per-side:20000}") int maxDirFilesPerSide,
+      @Value("${jardiff.limits.max-dir-mb-per-side:800}") int maxDirMbPerSide,
+      @Value("${jardiff.limits.max-warmup-diffs:1200}") int maxWarmupDiffs,
+      @Value("${jardiff.limits.default-warmup-diffs:400}") int defaultWarmupDiffs) {
+    this.jarCompareService = jarCompareService;
+    this.jarDiffService = jarDiffService;
+    this.compareStore = compareStore;
+    this.maxJarMb = Math.max(1, maxJarMb);
+    this.maxDirFilesPerSide = Math.max(1, maxDirFilesPerSide);
+    this.maxDirMbPerSide = Math.max(1, maxDirMbPerSide);
+    this.maxWarmupDiffs = Math.max(1, maxWarmupDiffs);
+    this.defaultWarmupDiffs = Math.max(1, defaultWarmupDiffs);
+  }
+
+  @GetMapping("/ping")
+  public String ping() {
+    return "ok";
+  }
+
+  /**
+   * 将常见的“compare not found”从 500 降级为 404，避免日志刷屏。
+   * @param ex 异常
+   * @return 友好的 HTTP 响应
+   */
+  @ExceptionHandler(IllegalArgumentException.class)
+  public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException ex) {
+    String msg = ex == null || ex.getMessage() == null ? "" : ex.getMessage();
+    log.warn("request rejected: {}", msg);
+    if ("compare not found".equalsIgnoreCase(msg.trim())) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(MediaType.TEXT_PLAIN).body("compare not found");
+    }
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.TEXT_PLAIN).body(msg.isEmpty() ? "bad request" : msg);
+  }
+
+  @PostMapping(value = "/compare/jars", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public CompareResult compareJars(
+      @RequestParam("leftJar") MultipartFile leftJar,
+      @RequestParam("rightJar") MultipartFile rightJar,
+      @RequestParam(value = "includeLib", defaultValue = "true") boolean includeLib,
+      @RequestParam(value = "includeClasses", defaultValue = "true") boolean includeClasses,
+      @RequestParam(value = "includeResources", defaultValue = "true") boolean includeResources,
+      @RequestParam(value = "deepCompareLib", defaultValue = "false") boolean deepCompareLib,
+      @RequestParam(value = "ignoreGlobs", required = false) String ignoreGlobs,
+      @RequestParam(value = "limitJarMb", required = false) Integer limitJarMb) {
+    Objects.requireNonNull(leftJar, "leftJar");
+    Objects.requireNonNull(rightJar, "rightJar");
+    log.info(
+        "compareJars start leftName={} leftSize={} rightName={} rightSize={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={} limitJarMb={}",
+        leftJar.getOriginalFilename(),
+        leftJar.getSize(),
+        rightJar.getOriginalFilename(),
+        rightJar.getSize(),
+        includeLib,
+        includeClasses,
+        includeResources,
+        deepCompareLib,
+        ignoreGlobs,
+        limitJarMb);
+    validateJarSize(leftJar, "左侧 jar", limitJarMb);
+    validateJarSize(rightJar, "右侧 jar", limitJarMb);
+    CompareOptions options = new CompareOptions(includeLib, includeClasses, includeResources, deepCompareLib, splitIgnore(ignoreGlobs));
+    CompareResult result = jarCompareService.compare(leftJar, rightJar, options);
+    Stats stats = result == null ? null : result.getStats();
+    log.info(
+        "compareJars done id={} added={} missing={} modified={} unchanged={}",
+        result == null ? "" : result.getId(),
+        stats == null ? 0 : stats.getAdded(),
+        stats == null ? 0 : stats.getMissing(),
+        stats == null ? 0 : stats.getModified(),
+        stats == null ? 0 : stats.getUnchanged());
+    return result;
+  }
+
+  @GetMapping("/compare/diff")
+  public DiffResult diff(@RequestParam("id") String id, @RequestParam("path") String path) {
+    log.info("diff start id={} path={}", id, path);
+    DiffResult result = jarDiffService.diff(id, path);
+    log.info(
+        "diff done id={} path={} kind={} fileType={} nested={} missingLeft={} missingRight={}",
+        id,
+        path,
+        result == null ? "" : result.getKind(),
+        result == null ? "" : result.getFileType(),
+        result != null && result.isNested(),
+        result != null && result.isMissingLeft(),
+        result != null && result.isMissingRight());
+    return result;
+  }
+
+  @PostMapping("/compare/diff/warm")
+  public StoredCompare.WarmupStatus warmDiffs(
+      @RequestParam("id") String id,
+      @RequestParam(value = "limit", defaultValue = "300") int limit) {
+    int lim = limit <= 0 ? defaultWarmupDiffs : limit;
+    lim = Math.min(lim, maxWarmupDiffs);
+    log.info("warmDiffs start id={} limit={} effectiveLimit={}", id, limit, lim);
+    return jarDiffService.warmDiffs(id, lim);
+  }
+
+  @GetMapping("/compare/diff/warm/status")
+  public StoredCompare.WarmupStatus warmDiffStatus(@RequestParam("id") String id) {
+    log.info("warmDiffStatus id={}", id);
+    return jarDiffService.warmStatus(id);
+  }
+
+  @GetMapping(value = "/compare/limits", produces = MediaType.APPLICATION_JSON_VALUE)
+  public Map<String, Object> limits() {
+    Map<String, Object> m = new HashMap<>();
+    m.put("maxJarMb", maxJarMb);
+    m.put("maxDirFiles", maxDirFilesPerSide);
+    m.put("maxDirMb", maxDirMbPerSide);
+    m.put("maxWarmupDiffs", maxWarmupDiffs);
+    m.put("defaultWarmupDiffs", defaultWarmupDiffs);
+    return m;
+  }
+
+  @PostMapping(value = "/compare/directory", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public CompareResult compareDirectory(
+      @RequestParam("leftFiles") MultipartFile[] leftFiles,
+      @RequestParam("rightFiles") MultipartFile[] rightFiles,
+      @RequestParam(value = "includeLib", defaultValue = "true") boolean includeLib,
+      @RequestParam(value = "includeClasses", defaultValue = "true") boolean includeClasses,
+      @RequestParam(value = "includeResources", defaultValue = "true") boolean includeResources,
+      @RequestParam(value = "deepCompareLib", defaultValue = "false") boolean deepCompareLib,
+      @RequestParam(value = "ignoreGlobs", required = false) String ignoreGlobs,
+      @RequestParam(value = "limitDirFiles", required = false) Integer limitDirFiles,
+      @RequestParam(value = "limitDirMb", required = false) Integer limitDirMb) {
+    log.info(
+        "compareDirectory start leftCount={} rightCount={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={} limitDirFiles={} limitDirMb={}",
+        leftFiles == null ? 0 : leftFiles.length,
+        rightFiles == null ? 0 : rightFiles.length,
+        includeLib,
+        includeClasses,
+        includeResources,
+        deepCompareLib,
+        ignoreGlobs,
+        limitDirFiles,
+        limitDirMb);
+    validateDirectoryUpload(leftFiles, "左侧目录", limitDirFiles, limitDirMb);
+    validateDirectoryUpload(rightFiles, "右侧目录", limitDirFiles, limitDirMb);
+    CompareOptions options = new CompareOptions(includeLib, includeClasses, includeResources, deepCompareLib, splitIgnore(ignoreGlobs));
+    CompareResult result = jarCompareService.compareDirectoryFull(leftFiles, rightFiles, options);
+    Stats stats = result == null ? null : result.getStats();
+    log.info(
+        "compareDirectory done id={} added={} missing={} modified={} unchanged={}",
+        result == null ? "" : result.getId(),
+        stats == null ? 0 : stats.getAdded(),
+        stats == null ? 0 : stats.getMissing(),
+        stats == null ? 0 : stats.getModified(),
+        stats == null ? 0 : stats.getUnchanged());
+    return result;
+  }
+
+  @PostMapping(value = "/compare/directory/path", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public CompareResult compareDirectoryByPath(
+      @RequestParam("leftPath") String leftPath,
+      @RequestParam("rightPath") String rightPath,
+      @RequestParam(value = "includeLib", defaultValue = "true") boolean includeLib,
+      @RequestParam(value = "includeClasses", defaultValue = "true") boolean includeClasses,
+      @RequestParam(value = "includeResources", defaultValue = "true") boolean includeResources,
+      @RequestParam(value = "deepCompareLib", defaultValue = "false") boolean deepCompareLib,
+      @RequestParam(value = "ignoreGlobs", required = false) String ignoreGlobs,
+      @RequestParam(value = "limitDirFiles", required = false) Integer limitDirFiles,
+      @RequestParam(value = "limitDirMb", required = false) Integer limitDirMb) {
+    Path leftDir = normalizeDirectoryPath(leftPath, "左侧目录");
+    Path rightDir = normalizeDirectoryPath(rightPath, "右侧目录");
+    log.info(
+        "compareDirectoryByPath start leftDir={} rightDir={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={} limitDirFiles={} limitDirMb={}",
+        leftDir,
+        rightDir,
+        includeLib,
+        includeClasses,
+        includeResources,
+        deepCompareLib,
+        ignoreGlobs,
+        limitDirFiles,
+        limitDirMb);
+    int maxCount = maxDirFilesPerSide;
+    if (limitDirFiles != null && limitDirFiles > 0) maxCount = Math.min(maxCount, limitDirFiles);
+    long maxBytes = 1024L * 1024L * (long) maxDirMbPerSide;
+    if (limitDirMb != null && limitDirMb > 0) maxBytes = Math.min(maxBytes, 1024L * 1024L * (long) limitDirMb);
+    CompareOptions options = new CompareOptions(includeLib, includeClasses, includeResources, deepCompareLib, splitIgnore(ignoreGlobs));
+    CompareResult result = jarCompareService.compareDirectoryFullByPath(leftDir, rightDir, options, maxCount, maxBytes);
+    Stats stats = result == null ? null : result.getStats();
+    log.info(
+        "compareDirectoryByPath done id={} added={} missing={} modified={} unchanged={}",
+        result == null ? "" : result.getId(),
+        stats == null ? 0 : stats.getAdded(),
+        stats == null ? 0 : stats.getMissing(),
+        stats == null ? 0 : stats.getModified(),
+        stats == null ? 0 : stats.getUnchanged());
+    return result;
+  }
+
+  @GetMapping(value = "/compare/nested/tree", produces = MediaType.APPLICATION_JSON_VALUE)
+  public List<TreeNode> nestedJarTree(@RequestParam("id") String id, @RequestParam("outer") String outer) {
+    log.info("nestedJarTree id={} outer={}", id, outer);
+    StoredCompare stored = compareStore.get(id).orElseThrow(() -> new IllegalArgumentException("compare not found"));
+    return jarCompareService.loadNestedJarTree(stored, outer);
+  }
+
+  /**
+   * 校验单个 jar 上传大小，超出上限则抛出异常并拒绝比对。
+   * @param jar 上传文件
+   * @param label 用于错误提示的名称
+   * @param limitJarMb 用户期望上限（MB）
+   */
+  private void validateJarSize(MultipartFile jar, String label, Integer limitJarMb) {
+    if (jar == null) return;
+    long max = 1024L * 1024L * (long) maxJarMb;
+    if (limitJarMb != null && limitJarMb > 0) {
+      long userMax = 1024L * 1024L * (long) limitJarMb;
+      max = Math.min(max, userMax);
+    }
+    long size = jar.getSize();
+    if (size > max) {
+      throw new IllegalArgumentException(label + "过大（" + formatBytes(size) + "），超过上限 " + formatBytes(max) + "，已禁止比对");
+    }
+  }
+
+  /**
+   * 校验目录上传：文件数量与总大小，超出上限则抛出异常并拒绝比对。
+   * @param files 上传文件数组
+   * @param label 用于错误提示的名称
+   * @param limitDirFiles 用户期望文件数上限（每侧）
+   * @param limitDirMb 用户期望总大小上限（MB，每侧）
+   */
+  private void validateDirectoryUpload(MultipartFile[] files, String label, Integer limitDirFiles, Integer limitDirMb) {
+    int maxCount = maxDirFilesPerSide;
+    if (limitDirFiles != null && limitDirFiles > 0) maxCount = Math.min(maxCount, limitDirFiles);
+    long maxBytes = 1024L * 1024L * (long) maxDirMbPerSide;
+    if (limitDirMb != null && limitDirMb > 0) maxBytes = Math.min(maxBytes, 1024L * 1024L * (long) limitDirMb);
+
+    int count = files == null ? 0 : files.length;
+    if (count > maxCount) {
+      throw new IllegalArgumentException(label + "文件过多（" + count + " 个），超过上限 " + maxCount + " 个，已禁止比对");
+    }
+    long total = 0;
+    if (files != null) {
+      for (MultipartFile f : files) {
+        if (f == null) continue;
+        long s = f.getSize();
+        if (s > 0) total += s;
+        if (total > maxBytes) break;
+      }
+    }
+    if (total > maxBytes) {
+      throw new IllegalArgumentException(label + "总大小过大（" + formatBytes(total) + "），超过上限 " + formatBytes(maxBytes) + "，已禁止比对");
+    }
+  }
+
+  private Path normalizeDirectoryPath(String raw, String label) {
+    String s = sanitizeDirectoryPathInput(raw);
+    if (s.isEmpty()) throw new IllegalArgumentException(label + "路径为空");
+    Path p = Paths.get(s).toAbsolutePath().normalize();
+    if (Files.notExists(p)) throw new IllegalArgumentException(label + "不存在：" + p);
+    if (!Files.exists(p)) throw new IllegalArgumentException(label + "无法访问或不存在：" + p);
+    if (!Files.isDirectory(p)) throw new IllegalArgumentException(label + "不是目录：" + p);
+    try (DirectoryStream<Path> ignored = Files.newDirectoryStream(p)) {
+    } catch (AccessDeniedException e) {
+      throw new IllegalArgumentException(label + "无权限访问：" + p);
+    } catch (IOException ignored) {
+    }
+    return p;
+  }
+
+  private String sanitizeDirectoryPathInput(String raw) {
+    String s = raw == null ? "" : raw;
+    String trimmed = trimPathEnds(s);
+    if (trimmed.length() >= 2) {
+      char first = trimmed.charAt(0);
+      char last = trimmed.charAt(trimmed.length() - 1);
+      if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+        trimmed = trimPathEnds(trimmed.substring(1, trimmed.length() - 1));
+      }
+    }
+    String decoded = tryDecodePercent(trimmed);
+    return trimPathEnds(decoded);
+  }
+
+  private String tryDecodePercent(String s) {
+    if (s == null || s.isEmpty()) return "";
+    if (!PERCENT_ENCODED.matcher(s).find()) return s;
+    try {
+      String safe = s.replace("+", "%2B");
+      return URLDecoder.decode(safe, StandardCharsets.UTF_8.name());
+    } catch (Exception ignored) {
+      return s;
+    }
+  }
+
+  private String trimPathEnds(String s) {
+    if (s == null || s.isEmpty()) return "";
+    int start = 0;
+    int end = s.length();
+    while (start < end && isTrimChar(s.charAt(start))) start += 1;
+    while (end > start && isTrimChar(s.charAt(end - 1))) end -= 1;
+    return start == 0 && end == s.length() ? s : s.substring(start, end);
+  }
+
+  private boolean isTrimChar(char c) {
+    return Character.isWhitespace(c)
+        || Character.isSpaceChar(c)
+        || c == '\u200B'
+        || c == '\u200C'
+        || c == '\u200D'
+        || c == '\uFEFF';
+  }
+
+  /**
+   * 将字节数格式化为可读字符串（B/KB/MB/GB）。
+   * @param bytes 字节数
+   * @return 可读字符串
+   */
+  private String formatBytes(long bytes) {
+    if (bytes <= 0) return "0 B";
+    String[] units = new String[] {"B", "KB", "MB", "GB", "TB"};
+    double v = bytes;
+    int i = 0;
+    while (v >= 1024 && i < units.length - 1) {
+      v = v / 1024.0;
+      i += 1;
+    }
+    String s = v >= 100 || i == 0 ? String.format("%.0f", v) : v >= 10 ? String.format("%.1f", v) : String.format("%.2f", v);
+    return s + " " + units[i];
+  }
+
+  @PostMapping(value = "/compare/directory/summary", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public DirectorySummaryResult directorySummary(
+      @RequestParam("leftFiles") MultipartFile[] leftFiles,
+      @RequestParam("rightFiles") MultipartFile[] rightFiles) {
+    log.info(
+        "directorySummary start leftCount={} rightCount={}",
+        leftFiles == null ? 0 : leftFiles.length,
+        rightFiles == null ? 0 : rightFiles.length);
+    return jarCompareService.compareDirectory(leftFiles, rightFiles);
+  }
+
+  @GetMapping(value = "/compare/report.json", produces = MediaType.APPLICATION_JSON_VALUE)
+  public CompareResult reportJson(@RequestParam("id") String id) {
+    log.info("reportJson id={}", id);
+    return jarCompareService.getCachedResult(id);
+  }
+
+  @GetMapping(value = "/compare/report.v2.json", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ReportV2 reportJsonV2(@RequestParam("id") String id) {
+    log.info("reportJsonV2 id={}", id);
+    CompareResult r = jarCompareService.getCachedResult(id);
+    StoredCompare stored = compareStore.get(id).orElse(null);
+    CompareOptions options = stored == null ? null : stored.getOptions();
+
+    List<ChangedRow> changed = collectChanged(r == null ? null : r.getTree());
+    ReportGroups groups = buildGroups(changed);
+    List<DependencyRow> deps = buildDependencyRows(changed);
+    List<RiskFinding> risks = buildRisks(changed);
+    return new ReportV2(r, options, groups, deps, risks);
+  }
+
+  @GetMapping(value = "/compare/report.html", produces = MediaType.TEXT_HTML_VALUE)
+  public ResponseEntity<byte[]> reportHtml(@RequestParam("id") String id) {
+    log.info("reportHtml id={}", id);
+    CompareResult r = jarCompareService.getCachedResult(id);
+    String html = buildHtmlReport(r);
+    byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
+    return ResponseEntity.ok()
+        .contentType(MediaType.TEXT_HTML)
+        .header("Content-Disposition", "attachment; filename=\"jardiff-report-" + id + ".html\"")
+        .body(bytes);
+  }
+
+  private String[] splitIgnore(String raw) {
+    if (raw == null) return null;
+    String s = raw.trim();
+    if (s.isEmpty()) return null;
+    String[] parts = s.replace("\r\n", "\n").replace("\r", "\n").split("[\n,;]+");
+    List<String> out = new ArrayList<>();
+    for (String p : parts) {
+      if (p == null) continue;
+      String v = p.trim();
+      if (!v.isEmpty()) out.add(v);
+    }
+    return out.isEmpty() ? null : out.toArray(new String[0]);
+  }
+
+  private String buildHtmlReport(CompareResult r) {
+    String id = r == null ? "" : (r.getId() == null ? "" : r.getId());
+    StoredCompare stored = id.isEmpty() ? null : compareStore.get(id).orElse(null);
+    CompareOptions options = stored == null ? null : stored.getOptions();
+    String leftName = r != null && r.getLeft() != null ? r.getLeft().getName() : "";
+    String rightName = r != null && r.getRight() != null ? r.getRight().getName() : "";
+    String leftMd5 = r != null && r.getLeft() != null ? r.getLeft().getMd5() : "";
+    String rightMd5 = r != null && r.getRight() != null ? r.getRight().getMd5() : "";
+    int added = r != null && r.getStats() != null ? r.getStats().getAdded() : 0;
+    int missing = r != null && r.getStats() != null ? r.getStats().getMissing() : 0;
+    int modified = r != null && r.getStats() != null ? r.getStats().getModified() : 0;
+    int unchanged = r != null && r.getStats() != null ? r.getStats().getUnchanged() : 0;
+
+    StringBuilder sb = new StringBuilder();
+    sb.append("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"/>")
+        .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>")
+        .append("<title>Jar 差异报告</title>")
+        .append("<style>")
+        .append("body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial;max-width:1080px;margin:24px auto;padding:0 16px;color:#111827}")
+        .append("h1{font-size:20px;margin:0 0 12px} .card{border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0}")
+        .append("table{width:100%;border-collapse:collapse} td,th{border-bottom:1px solid #f3f4f6;padding:8px 6px;font-size:13px;text-align:left}")
+        .append(".mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-size:12px}")
+        .append(".tag{display:inline-block;border-radius:999px;padding:2px 8px;font-size:12px;border:1px solid #e5e7eb;margin-right:6px}")
+        .append("</style></head><body>");
+
+    sb.append("<h1>Jar 版本差异报告</h1>");
+    sb.append("<div class=\"card\">");
+    sb.append("<div><span class=\"tag\">ID</span><span class=\"mono\">").append(escape(id)).append("</span></div>");
+    sb.append("<div style=\"margin-top:8px\"><span class=\"tag\">左</span>").append(escape(leftName)).append(" <span class=\"mono\">").append(escape(leftMd5)).append("</span></div>");
+    sb.append("<div style=\"margin-top:6px\"><span class=\"tag\">右</span>").append(escape(rightName)).append(" <span class=\"mono\">").append(escape(rightMd5)).append("</span></div>");
+    sb.append("</div>");
+
+    sb.append("<div class=\"card\">");
+    sb.append("<div><span class=\"tag\">修改</span>").append(modified).append(" <span class=\"tag\">新增</span>").append(added)
+        .append(" <span class=\"tag\">缺失</span>").append(missing).append(" <span class=\"tag\">相同</span>").append(unchanged).append("</div>");
+    sb.append("</div>");
+
+    sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">变化文件</h2>");
+    sb.append("<div style=\"font-size:12px;color:#6b7280;margin:6px 0 10px\">按应用/依赖分段展示；内嵌依赖文件以容器 jar 聚合</div>");
+    List<ChangedRow> changed = collectChanged(r == null ? null : r.getTree());
+    ReportGroups groups = buildGroups(changed);
+    List<DependencyRow> deps = buildDependencyRows(changed);
+    List<RiskFinding> risks = buildRisks(changed);
+
+    sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">参数</h2>");
+    sb.append("<table><tbody>");
+    sb.append("<tr><th style=\"width:160px\">includeClasses</th><td>").append(options == null ? "" : String.valueOf(options.isIncludeClasses())).append("</td></tr>");
+    sb.append("<tr><th>includeResources</th><td>").append(options == null ? "" : String.valueOf(options.isIncludeResources())).append("</td></tr>");
+    sb.append("<tr><th>includeLib</th><td>").append(options == null ? "" : String.valueOf(options.isIncludeLib())).append("</td></tr>");
+    sb.append("<tr><th>deepCompareLib</th><td>").append(options == null ? "" : String.valueOf(options.isDeepCompareLib())).append("</td></tr>");
+    sb.append("<tr><th>ignoreGlobs</th><td class=\"mono\">");
+    if (options != null && options.getIgnoreGlobs() != null) {
+      for (String g : options.getIgnoreGlobs()) {
+        if (g == null) continue;
+        String v = g.trim();
+        if (v.isEmpty()) continue;
+        sb.append(escape(v)).append("<br/>");
+      }
+    }
+    sb.append("</td></tr>");
+    sb.append("</tbody></table></div>");
+
+    sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">摘要</h2>");
+    sb.append("<div><span class=\"tag\">应用</span>修改 ").append(groups.app.modified).append(" 新增 ").append(groups.app.added).append(" 缺失 ").append(groups.app.missing).append("</div>");
+    sb.append("<div style=\"margin-top:6px\"><span class=\"tag\">依赖</span>修改 ").append(groups.deps.modified).append(" 新增 ").append(groups.deps.added).append(" 缺失 ").append(groups.deps.missing).append("</div>");
+    sb.append("</div>");
+
+    if (!risks.isEmpty()) {
+      sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">风险提示</h2>");
+      sb.append("<ul style=\"margin:0;padding-left:18px\">");
+      for (RiskFinding rf : risks) {
+        sb.append("<li><strong>").append(escape(rf.title)).append("</strong> <span style=\"color:#6b7280\">").append(escape(rf.desc)).append("</span></li>");
+      }
+      sb.append("</ul></div>");
+    }
+
+    sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">依赖变化（lib jar 级）</h2>");
+    sb.append("<table><thead><tr><th>依赖</th><th>状态</th><th>内部差异</th></tr></thead><tbody>");
+    for (DependencyRow d : deps) {
+      sb.append("<tr><td class=\"mono\">").append(escape(d.jarPath)).append("</td><td>")
+          .append(escape(d.status)).append("</td><td>").append(d.innerChanged).append("</td></tr>");
+    }
+    sb.append("</tbody></table></div>");
+
+    sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">应用变化文件</h2>");
+    sb.append("<table><thead><tr><th>路径</th><th>状态</th></tr></thead><tbody>");
+    appendChangedRows(sb, changed, "app");
+    sb.append("</tbody></table></div>");
+
+    sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">依赖变化文件</h2>");
+    sb.append("<table><thead><tr><th>路径</th><th>状态</th></tr></thead><tbody>");
+    appendChangedRows(sb, changed, "deps");
+    sb.append("</tbody></table></div>");
+
+    sb.append("</body></html>");
+    return sb.toString();
+  }
+
+  private void appendChangedRows(StringBuilder sb, List<ChangedRow> rows, String group) {
+    if (sb == null || rows == null) return;
+    for (ChangedRow r : rows) {
+      if (r == null) continue;
+      if (group != null && !group.equals(r.group)) continue;
+      sb.append("<tr><td class=\"mono\">").append(escape(r.path)).append("</td><td>").append(escape(r.status)).append("</td></tr>");
+    }
+  }
+
+  private List<ChangedRow> collectChanged(List<TreeNode> nodes) {
+    List<ChangedRow> out = new ArrayList<>();
+    walkChanged(nodes, out);
+    return out;
+  }
+
+  private void walkChanged(List<TreeNode> nodes, List<ChangedRow> out) {
+    if (nodes == null || out == null) return;
+    for (TreeNode n : nodes) {
+      if (n == null) continue;
+      if ("file".equals(n.getType())) {
+        String s = n.getRightStatus();
+        if (s != null && !"unchanged".equals(s)) {
+          String p = n.getValue() == null ? "" : n.getValue();
+          out.add(new ChangedRow(p, s, classifyGroup(p)));
+        }
+      }
+      if (n.getChildren() != null && !n.getChildren().isEmpty()) walkChanged(n.getChildren(), out);
+    }
+  }
+
+  private String classifyGroup(String path) {
+    if (path == null) return "other";
+    if (path.startsWith("BOOT-INF/lib/")) return "deps";
+    if (path.startsWith("BOOT-INF/classes/")) return "app";
+    return "other";
+  }
+
+  private ReportGroups buildGroups(List<ChangedRow> rows) {
+    ReportGroups g = new ReportGroups();
+    if (rows == null) return g;
+    for (ChangedRow r : rows) {
+      if (r == null) continue;
+      GroupStats t = "deps".equals(r.group) ? g.deps : "app".equals(r.group) ? g.app : g.other;
+      if ("added".equals(r.status)) t.added++;
+      else if ("missing".equals(r.status)) t.missing++;
+      else if ("modified".equals(r.status)) t.modified++;
+    }
+    return g;
+  }
+
+  private List<DependencyRow> buildDependencyRows(List<ChangedRow> rows) {
+    Map<String, DependencyRow> m = new HashMap<>();
+    if (rows == null) return new ArrayList<>();
+    for (ChangedRow r : rows) {
+      if (r == null || r.path == null) continue;
+      if (!r.path.startsWith("BOOT-INF/lib/")) continue;
+      String p = r.path;
+      int idx = p.indexOf("!/");
+      String jarPath = idx > 0 ? p.substring(0, idx) : p;
+      boolean inner = idx > 0;
+      DependencyRow d = m.get(jarPath);
+      if (d == null) {
+        d = new DependencyRow(jarPath, "", 0);
+        m.put(jarPath, d);
+      }
+      if (inner) d.innerChanged++;
+      if (!inner) d.status = r.status;
+      if (d.status == null || d.status.isEmpty()) d.status = r.status;
+    }
+    return new ArrayList<>(m.values());
+  }
+
+  private List<RiskFinding> buildRisks(List<ChangedRow> rows) {
+    List<RiskFinding> risks = new ArrayList<>();
+    if (rows == null) return risks;
+    boolean depsChanged = false;
+    boolean configChanged = false;
+    boolean signChanged = false;
+    for (ChangedRow r : rows) {
+      if (r == null || r.path == null) continue;
+      String p = r.path;
+      if (!depsChanged && p.startsWith("BOOT-INF/lib/")) depsChanged = true;
+      if (!configChanged && p.startsWith("BOOT-INF/classes/") && (p.contains("application.") || p.contains("bootstrap."))) configChanged = true;
+      String up = p.toUpperCase();
+      if (!signChanged && up.startsWith("META-INF/") && (up.endsWith(".SF") || up.endsWith(".RSA") || up.endsWith(".DSA"))) signChanged = true;
+    }
+    if (depsChanged) risks.add(new RiskFinding("依赖发生变化", "建议在依赖视图确认新增/删除/版本漂移，并评估回归范围。"));
+    if (configChanged) risks.add(new RiskFinding("关键配置变更", "检测到 application*/bootstrap* 相关配置变化，建议核对环境差异与默认值。"));
+    if (signChanged) risks.add(new RiskFinding("签名/证书文件变化", "若非预期变更，可通过忽略规则减少噪音，但发布审计仍需保留记录。"));
+    return risks;
+  }
+
+  public static class ReportV2 {
+    private CompareResult result;
+    private CompareOptions options;
+    private ReportGroups groups;
+    private List<DependencyRow> dependencies;
+    private List<RiskFinding> risks;
+
+    public ReportV2() {
+    }
+
+    public ReportV2(CompareResult result, CompareOptions options, ReportGroups groups, List<DependencyRow> dependencies, List<RiskFinding> risks) {
+      this.result = result;
+      this.options = options;
+      this.groups = groups;
+      this.dependencies = dependencies;
+      this.risks = risks;
+    }
+
+    public CompareResult getResult() {
+      return result;
+    }
+
+    public void setResult(CompareResult result) {
+      this.result = result;
+    }
+
+    public CompareOptions getOptions() {
+      return options;
+    }
+
+    public void setOptions(CompareOptions options) {
+      this.options = options;
+    }
+
+    public ReportGroups getGroups() {
+      return groups;
+    }
+
+    public void setGroups(ReportGroups groups) {
+      this.groups = groups;
+    }
+
+    public List<DependencyRow> getDependencies() {
+      return dependencies;
+    }
+
+    public void setDependencies(List<DependencyRow> dependencies) {
+      this.dependencies = dependencies;
+    }
+
+    public List<RiskFinding> getRisks() {
+      return risks;
+    }
+
+    public void setRisks(List<RiskFinding> risks) {
+      this.risks = risks;
+    }
+  }
+
+  public static class ChangedRow {
+    private String path;
+    private String status;
+    private String group;
+
+    public ChangedRow() {
+    }
+
+    public ChangedRow(String path, String status, String group) {
+      this.path = path;
+      this.status = status;
+      this.group = group;
+    }
+
+    public String getPath() {
+      return path;
+    }
+
+    public void setPath(String path) {
+      this.path = path;
+    }
+
+    public String getStatus() {
+      return status;
+    }
+
+    public void setStatus(String status) {
+      this.status = status;
+    }
+
+    public String getGroup() {
+      return group;
+    }
+
+    public void setGroup(String group) {
+      this.group = group;
+    }
+  }
+
+  public static class GroupStats {
+    public int added;
+    public int missing;
+    public int modified;
+
+    public int getAdded() {
+      return added;
+    }
+
+    public int getMissing() {
+      return missing;
+    }
+
+    public int getModified() {
+      return modified;
+    }
+  }
+
+  public static class ReportGroups {
+    public GroupStats app = new GroupStats();
+    public GroupStats deps = new GroupStats();
+    public GroupStats other = new GroupStats();
+
+    public GroupStats getApp() {
+      return app;
+    }
+
+    public GroupStats getDeps() {
+      return deps;
+    }
+
+    public GroupStats getOther() {
+      return other;
+    }
+  }
+
+  public static class DependencyRow {
+    private String jarPath;
+    private String status;
+    private int innerChanged;
+
+    public DependencyRow() {
+    }
+
+    public DependencyRow(String jarPath, String status, int innerChanged) {
+      this.jarPath = jarPath;
+      this.status = status;
+      this.innerChanged = innerChanged;
+    }
+
+    public String getJarPath() {
+      return jarPath;
+    }
+
+    public void setJarPath(String jarPath) {
+      this.jarPath = jarPath;
+    }
+
+    public String getStatus() {
+      return status;
+    }
+
+    public void setStatus(String status) {
+      this.status = status;
+    }
+
+    public int getInnerChanged() {
+      return innerChanged;
+    }
+
+    public void setInnerChanged(int innerChanged) {
+      this.innerChanged = innerChanged;
+    }
+  }
+
+  public static class RiskFinding {
+    private String title;
+    private String desc;
+
+    public RiskFinding() {
+    }
+
+    public RiskFinding(String title, String desc) {
+      this.title = title;
+      this.desc = desc;
+    }
+
+    public String getTitle() {
+      return title;
+    }
+
+    public void setTitle(String title) {
+      this.title = title;
+    }
+
+    public String getDesc() {
+      return desc;
+    }
+
+    public void setDesc(String desc) {
+      this.desc = desc;
+    }
+  }
+
+  private String escape(String s) {
+    if (s == null) return "";
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+  }
+}
+
+@Component
+class CompareConcurrencyLimiter {
+  private final int maxConcurrentCompares;
+  private final Semaphore permits;
+
+  /**
+   * 初始化比对任务的并发额度控制器。
+   * @param maxConcurrentCompares 最大并发比对数（至少为 1）
+   */
+  public CompareConcurrencyLimiter(@Value("${jardiff.concurrency.max-compares:2}") int maxConcurrentCompares) {
+    this.maxConcurrentCompares = Math.max(1, maxConcurrentCompares);
+    this.permits = new Semaphore(this.maxConcurrentCompares, true);
+  }
+
+  /**
+   * 尝试获取一个并发额度，获取失败表示当前系统繁忙应当拒绝请求。
+   * @return 是否获取成功
+   */
+  public boolean tryAcquire() {
+    return permits.tryAcquire();
+  }
+
+  /**
+   * 释放一个并发额度。
+   */
+  public void release() {
+    try {
+      permits.release();
+    } catch (Exception ignored) {
+    }
+  }
+
+  /**
+   * 获取最大并发比对数。
+   * @return 最大并发数
+   */
+  public int maxConcurrentCompares() {
+    return maxConcurrentCompares;
+  }
+}
+
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+class CompareConcurrencyFilter extends OncePerRequestFilter {
+  private static final Logger log = LoggerFactory.getLogger(CompareConcurrencyFilter.class);
+  private final CompareConcurrencyLimiter limiter;
+
+  /**
+   * 创建一个在文件上传解析之前拦截的并发控制过滤器，用于尽早拒绝超限请求。
+   * @param limiter 并发额度控制器
+   */
+  public CompareConcurrencyFilter(CompareConcurrencyLimiter limiter) {
+    this.limiter = limiter;
+  }
+
+  @Override
+  protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      throws ServletException, IOException {
+    if (!shouldLimit(request)) {
+      filterChain.doFilter(request, response);
+      return;
+    }
+
+    boolean ok = limiter.tryAcquire();
+    if (!ok) {
+      String msg = "比对任务已达上限（" + limiter.maxConcurrentCompares() + "），请稍后再试";
+      log.warn("compare rejected: {}", msg);
+      response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+      response.setContentType(MediaType.TEXT_PLAIN_VALUE);
+      response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+      response.getWriter().write(msg);
+      return;
+    }
+
+    try {
+      filterChain.doFilter(request, response);
+    } finally {
+      limiter.release();
+    }
+  }
+
+  /**
+   * 判断当前请求是否需要占用“比对任务并发额度”。
+   * @param request HTTP 请求
+   * @return 是否需要限制
+   */
+  private boolean shouldLimit(HttpServletRequest request) {
+    if (request == null) return false;
+    String method = request.getMethod();
+    if (method == null || !"POST".equalsIgnoreCase(method)) return false;
+    String uri = request.getRequestURI();
+    if (uri == null) return false;
+    if (!uri.startsWith("/api/compare/")) return false;
+    return "/api/compare/jars".equals(uri)
+        || "/api/compare/directory".equals(uri)
+        || "/api/compare/directory/path".equals(uri)
+        || "/api/compare/directory/summary".equals(uri);
+  }
+}
