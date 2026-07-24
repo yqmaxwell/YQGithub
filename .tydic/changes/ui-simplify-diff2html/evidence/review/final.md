@@ -43,9 +43,6 @@ returnTo: none
 blockers: []
 evidence:
   - path: evidence/review/final.md
-  - 规格正确性通过
-  - 验证真实性通过
-  - 工程质量通过
 stateRevision: 3
 diffHash: ff878b79a19adebe25ba2ca446d198158562a1214687f7bb4f233e03101c77c1
 commitHash:
