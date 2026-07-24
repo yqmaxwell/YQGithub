@@ -501,5 +501,8 @@
     return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   }
 
+  if (typeof ElementPlus !== 'undefined') {
+    app.use(ElementPlus)
+  }
   app.mount('#app')
 })()
