@@ -200,7 +200,7 @@
           {
             "type": "machine",
             "path": "evidence/code/T002-001.md",
-            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "sha256": "9bfa127f72dc3c5b11030a9fd5f9c76cc91561325b694253a72b01d3b0b56436",
             "jsonl": "evidence/code/T002-001.md.jsonl",
             "command": "mvn compile 2>&1",
             "exitCode": 0,
