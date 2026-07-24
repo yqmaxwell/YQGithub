@@ -25,6 +25,17 @@
     localStorage.removeItem(KEY)
   }
 
+  function get(key) {
+    const data = load()
+    return data ? data[key] : undefined
+  }
+
+  function set(key, value) {
+    const data = load() || {}
+    data[key] = value
+    save(data)
+  }
+
   window.JarDiff = window.JarDiff || {}
-  window.JarDiff.storage = { load, save, clear, KEY }
+  window.JarDiff.storage = { load, save, clear, get, set, KEY }
 })()
