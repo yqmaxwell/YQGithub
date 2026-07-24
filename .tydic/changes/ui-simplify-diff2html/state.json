@@ -3,7 +3,7 @@
   "stateRevision": 3,
   "changeId": "ui-simplify-diff2html",
   "businessTopic": "页面简化与 diff2html 差异展示优化",
-  "state": "REVIEW_READY",
+  "state": "VERIFIED",
   "gate": {
     "status": "OPEN",
     "returnTo": "none",
@@ -33,6 +33,10 @@
     "tickets": {
       "path": "tickets.md",
       "sha256": "a4a68c8c5ff4855c636714656350433a9fc3438aeeda33fbf9520c5b6e83c607",
+      "status": "PASS"
+    },
+    "reviewEvidence": {
+      "path": "evidence/review/final.md",
       "status": "PASS"
     }
   },
