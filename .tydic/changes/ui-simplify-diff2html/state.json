@@ -200,17 +200,26 @@
         "claimedAt": "2026-07-24T10:23:29+08:00",
         "workspaceBaseline": {
           "root": "/Users/maxwell/Documents/code_project/TraeProject/代码差异比对及分析_V0.1",
-          "fingerprint": "7e16d07d05050d4d966128e8f75de61c2466ab6c1063d0da4d468048e26e93b9",
+          "fingerprint": "cee0f95344e2217d14612629dd2e6baa7c0bd6b87467b17b4861e80ad0f7f31e",
           "entries": {
             "src/main/resources/static/app/api.js": {
-              "sha256": "2362f3641860713d273e509944d5434aeadfe483520aa1360d02f17f1e34737b"
+              "sha256": "727f16dd26b00617a912614642aa1132a359e1d78b1581375eef7ff6ec92973c"
             },
             "src/main/resources/static/index.html": {
-              "sha256": "6be63ec424d0ab88bd4dbb7c01b8028096c3431360251d386de812266b6b0d2c"
+              "sha256": "c8db4cd9b5867386033a59ec6bd8f36b424a118c320c2acf2476f67f55fce04d"
+            },
+            "src/main/resources/static/vendor/diff2html/diff2html.min.css": {
+              "sha256": "20c04ae15359a748afc1e7d29f9d5bb3076cae19341e83132dcd86a851c50578"
+            },
+            "src/main/resources/static/vendor/diff2html/diff2html.min.js": {
+              "sha256": "c59a1ab80bc913ae5db094d0a4274b56bf9a94245f30819be071075ae298580b"
+            },
+            "src/main/resources/static/vendor/highlight.js/highlight.min.js": {
+              "sha256": "837a6fa5b0c736b52bbde2b2b6190f305da3fc9ed41681db5321507057b5c846"
             }
           },
           "snapshotVersion": 2,
-          "outsideFingerprint": "7a6b11af99136c37925cfc72b15669d47ada87c76941e325263e885629767ace"
+          "outsideFingerprint": "ba9fd3c430bbb1f9c2ed8f3f17f6853e5c7055d5139b43cc79f8d5ee7822da8c"
         }
       },
       "T003": {
