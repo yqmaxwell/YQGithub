@@ -1,9 +1,9 @@
 {
   "schemaVersion": 5,
-  "stateRevision": 5,
+  "stateRevision": 7,
   "changeId": "ui-simplify-diff2html",
   "businessTopic": "页面简化与 diff2html 差异展示优化",
-  "state": "CODING",
+  "state": "PLANNED",
   "gate": {
     "status": "OPEN",
     "returnTo": "none",
@@ -138,7 +138,7 @@
         "completedAt": "2026-07-24T10:19:06+08:00"
       },
       "T002": {
-        "status": "CLAIMED",
+        "status": "PENDING",
         "prerequisites": [],
         "behavior": "下载 diff2html 和 highlight.js dist 文件到 vendor/ 目录。重写 index.html 中 <style> 块为暗色主题：OLED 深黑底 #0d1117、暗色面板 #161b22、GitHub Dark diff 配色、Neubrutalism 组件 CSS。在 <script src> 中新增 diff2html 和 highlight.js 引用，移除 ui-diff.js 引用。在 api.js 新增 loadUnifiedDiff(id,path)、compareFiles(fd,onProgress)、loadFilesUnifiedDiff(left,right) 三个API函数。",
         "acceptance": [
@@ -183,8 +183,9 @@
           ],
           "forbidden": [],
           "new": [
-            "src/main/resources/static/vendor/diff2html/",
-            "src/main/resources/static/vendor/highlight.js/"
+            "src/main/resources/static/vendor/diff2html/diff2html.min.js",
+            "src/main/resources/static/vendor/diff2html/diff2html.min.css",
+            "src/main/resources/static/vendor/highlight.js/highlight.min.js"
           ],
           "readOnly": [
             "src/main/java/com/example/jardiff/api/CompareController.java",
@@ -196,11 +197,17 @@
           "mvn spring-boot:run 2>&1 & sleep 5 && curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/"
         ],
         "evidence": [],
-        "modifiedFiles": [],
+        "modifiedFiles": [
+          "src/main/resources/static/vendor/diff2html/diff2html.min.js",
+          "src/main/resources/static/vendor/diff2html/diff2html.min.css",
+          "src/main/resources/static/vendor/highlight.js/highlight.min.js",
+          "src/main/resources/static/index.html",
+          "src/main/resources/static/app/api.js"
+        ],
         "claimedAt": "2026-07-24T10:23:29+08:00",
         "workspaceBaseline": {
           "root": "/Users/maxwell/Documents/code_project/TraeProject/代码差异比对及分析_V0.1",
-          "fingerprint": "cee0f95344e2217d14612629dd2e6baa7c0bd6b87467b17b4861e80ad0f7f31e",
+          "fingerprint": "1d456e57ebc815bcd83150ec32199f6e5aba014676dd197e0e0bc5676f863013",
           "entries": {
             "src/main/resources/static/app/api.js": {
               "sha256": "727f16dd26b00617a912614642aa1132a359e1d78b1581375eef7ff6ec92973c"
@@ -219,7 +226,7 @@
             }
           },
           "snapshotVersion": 2,
-          "outsideFingerprint": "ba9fd3c430bbb1f9c2ed8f3f17f6853e5c7055d5139b43cc79f8d5ee7822da8c"
+          "outsideFingerprint": "7a6b11af99136c37925cfc72b15669d47ada87c76941e325263e885629767ace"
         }
       },
       "T003": {
