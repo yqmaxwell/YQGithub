@@ -207,7 +207,7 @@
             "taskId": "T002",
             "changeId": "ui-simplify-diff2html",
             "statePath": "state.json",
-            "stateRevision": 3,
+            "stateRevision": 13,
             "diffHash": "7e16d07d05050d4d966128e8f75de61c2466ab6c1063d0da4d468048e26e93b9",
             "commitHash": "",
             "producerType": "tydic-code",
