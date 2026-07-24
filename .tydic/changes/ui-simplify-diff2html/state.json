@@ -196,7 +196,18 @@
         "verificationCommands": [
           "mvn spring-boot:run 2>&1 & sleep 5 && curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/"
         ],
-        "evidence": [],
+        "evidence": [
+          {
+            "criterion": "mvn compile 2>&1 | grep \"BUILD SUCCESS\"",
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md"
+            ],
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-24T10:30:00+08:00",
+            "generator": "scripts/tydic-kernel.py"
+          }
+        ],
         "modifiedFiles": [],
         "claimedAt": "2026-07-24T10:34:07+08:00",
         "workspaceBaseline": {
