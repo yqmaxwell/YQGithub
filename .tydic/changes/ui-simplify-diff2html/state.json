@@ -186,7 +186,11 @@
             "src/main/resources/static/vendor/diff2html/",
             "src/main/resources/static/vendor/highlight.js/"
           ],
-          "readOnly": []
+          "readOnly": [
+            "src/main/java/com/example/jardiff/api/CompareController.java",
+            "src/main/java/com/example/jardiff/core/JarDiffService.java",
+            "src/test/java/com/example/jardiff/core/JarDiffServiceTest.java"
+          ]
         },
         "verificationCommands": [
           "mvn spring-boot:run 2>&1 & sleep 5 && curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/"
