@@ -1,9 +1,9 @@
 {
   "schemaVersion": 5,
-  "stateRevision": 7,
+  "stateRevision": 13,
   "changeId": "ui-simplify-diff2html",
   "businessTopic": "页面简化与 diff2html 差异展示优化",
-  "state": "PLANNED",
+  "state": "CODING",
   "gate": {
     "status": "OPEN",
     "returnTo": "none",
@@ -138,7 +138,7 @@
         "completedAt": "2026-07-24T10:19:06+08:00"
       },
       "T002": {
-        "status": "PENDING",
+        "status": "DONE",
         "prerequisites": [],
         "behavior": "下载 diff2html 和 highlight.js dist 文件到 vendor/ 目录。重写 index.html 中 <style> 块为暗色主题：OLED 深黑底 #0d1117、暗色面板 #161b22、GitHub Dark diff 配色、Neubrutalism 组件 CSS。在 <script src> 中新增 diff2html 和 highlight.js 引用，移除 ui-diff.js 引用。在 api.js 新增 loadUnifiedDiff(id,path)、compareFiles(fd,onProgress)、loadFilesUnifiedDiff(left,right) 三个API函数。",
         "acceptance": [
@@ -197,14 +197,8 @@
           "mvn spring-boot:run 2>&1 & sleep 5 && curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/"
         ],
         "evidence": [],
-        "modifiedFiles": [
-          "src/main/resources/static/vendor/diff2html/diff2html.min.js",
-          "src/main/resources/static/vendor/diff2html/diff2html.min.css",
-          "src/main/resources/static/vendor/highlight.js/highlight.min.js",
-          "src/main/resources/static/index.html",
-          "src/main/resources/static/app/api.js"
-        ],
-        "claimedAt": "2026-07-24T10:23:29+08:00",
+        "modifiedFiles": [],
+        "claimedAt": "2026-07-24T10:34:07+08:00",
         "workspaceBaseline": {
           "root": "/Users/maxwell/Documents/code_project/TraeProject/代码差异比对及分析_V0.1",
           "fingerprint": "1d456e57ebc815bcd83150ec32199f6e5aba014676dd197e0e0bc5676f863013",
