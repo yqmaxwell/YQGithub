@@ -3,7 +3,7 @@
   "stateRevision": 3,
   "changeId": "ui-simplify-diff2html",
   "businessTopic": "页面简化与 diff2html 差异展示优化",
-  "state": "CODING",
+  "state": "REVIEW_READY",
   "gate": {
     "status": "OPEN",
     "returnTo": "none",
