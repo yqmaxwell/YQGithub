@@ -46,7 +46,7 @@ blockers: []
 evidence:
   - path: evidence/review/final.md
 stateRevision: 3
-diffHash: ff878b79a19adebe25ba2ca446d198158562a1214687f7bb4f233e03101c77c1
+diffHash: f4627937ee3cabd0b3508fd7e18695a695ef63ff8555f7102e7a30ac8b4df114
 commitHash:
 producerType: coordinator
 createdAt: 2026-07-24T12:42:00+08:00
