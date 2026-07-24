@@ -230,7 +230,7 @@
         "evidenceStateRevision": 1
       },
       "T003": {
-        "status": "CLAIMED",
+        "status": "DONE",
         "prerequisites": [
           "T001",
           "T002"
@@ -263,7 +263,24 @@
         "verificationCommands": [
           "test -f src/main/resources/static/app/app.js"
         ],
-        "evidence": [],
+        "evidence": [
+          {
+            "type": "machine",
+            "path": "evidence/code/T003-001.md",
+            "sha256": "694de1755a7fb0d564e8dd89ad2694e39adeff2d5283c7ded450acee5b4a0c84",
+            "jsonl": "evidence/code/T003-001.md.jsonl",
+            "taskId": "T003",
+            "changeId": "ui-simplify-diff2html",
+            "statePath": "state.json",
+            "stateRevision": 2,
+            "diffHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "commitHash": "head",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-24T11:03:00+08:00",
+            "command": "mvn compile 2>&1",
+            "exitCode": 0
+          }
+        ],
         "modifiedFiles": [],
         "claimedAt": "2026-07-24T10:59:27+08:00",
         "workspaceBaseline": {
@@ -279,7 +296,8 @@
           },
           "snapshotVersion": 2,
           "outsideFingerprint": "ede364bd40b739e580944db144954eb3eae7df3089f4312d7e2df05f48fa00ba"
-        }
+        },
+        "evidenceStateRevision": 2
       },
       "T004": {
         "status": "PENDING",
