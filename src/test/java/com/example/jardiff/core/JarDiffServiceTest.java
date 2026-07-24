@@ -1,5 +1,7 @@
 package com.example.jardiff.core;
 
+// [AGC:FILE] tool=Cc author=maxwell date=2026-07-24
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;

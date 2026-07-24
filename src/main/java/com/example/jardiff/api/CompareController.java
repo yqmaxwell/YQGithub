@@ -1,5 +1,7 @@
 package com.example.jardiff.api;
 
+// [AGC:FILE] tool=Cc author=maxwell date=2026-07-24
+
 import com.example.jardiff.core.CompareOptions;
 import com.example.jardiff.core.CompareResult;
 import com.example.jardiff.core.CompareStore;
@@ -164,13 +166,16 @@ public class CompareController {
     return result;
   }
 
+  // [AGC:START] tool=Cc author=maxwell date=2026-07-24
   @GetMapping(value = "/compare/diff/unified", produces = MediaType.TEXT_PLAIN_VALUE)
   public ResponseEntity<String> unifiedDiff(@RequestParam("id") String id, @RequestParam("path") String path) {
-    log.info("unifiedDiff start id={} path={}", id, path);
+    log.info("[jarDiff][start] FuncName=CompareController.unifiedDiff, id={}, path={}", id, path);
     String unified = jarDiffService.generateUnifiedDiff(id, path);
     if (unified == null) {
+      log.info("[jarDiff][end] FuncName=CompareController.unifiedDiff, id={}, path={}, result=EMPTY_NON_TEXT", id, path);
       return ResponseEntity.ok("");
     }
+    log.info("[jarDiff][end] FuncName=CompareController.unifiedDiff, id={}, path={}, resultLength={}", id, path, unified.length());
     return ResponseEntity.ok(unified);
   }
 
@@ -398,7 +403,8 @@ public class CompareController {
   public Map<String, Object> compareFiles(
       @RequestParam("left") MultipartFile left,
       @RequestParam("right") MultipartFile right) {
-    log.info("compareFiles start left={} right={}", left.getOriginalFilename(), right.getOriginalFilename());
+    log.info("[jarDiff][start] FuncName=CompareController.compareFiles, left={}, right={}",
+        left.getOriginalFilename(), right.getOriginalFilename());
     Map<String, Object> res = new HashMap<>();
     try {
       byte[] leftBytes = left.getBytes();
@@ -427,8 +433,11 @@ public class CompareController {
 
       fileTextCache.put(id + ":left", leftText);
       fileTextCache.put(id + ":right", rightText);
+      log.info("[jarDiff][end] FuncName=CompareController.compareFiles, id={}, decompiled={}, leftLen={}, rightLen={}",
+          id, decompiled, leftText != null ? leftText.length() : 0, rightText != null ? rightText.length() : 0);
     } catch (IOException e) {
-      log.error("compareFiles error", e);
+      log.error("[jarDiff][fail] FuncName=CompareController.compareFiles, errorCode=FILE_COMPARE_IO_ERR, reason={}",
+          e.getMessage(), e);
       res.put("error", e.getMessage());
     }
     return res;
@@ -438,7 +447,8 @@ public class CompareController {
   public ResponseEntity<String> filesUnifiedDiff(
       @RequestParam("left") MultipartFile left,
       @RequestParam("right") MultipartFile right) {
-    log.info("filesUnifiedDiff start left={} right={}", left.getOriginalFilename(), right.getOriginalFilename());
+    log.info("[jarDiff][start] FuncName=CompareController.filesUnifiedDiff, left={}, right={}",
+        left.getOriginalFilename(), right.getOriginalFilename());
     try {
       byte[] leftBytes = left.getBytes();
       byte[] rightBytes = right.getBytes();
@@ -446,15 +456,20 @@ public class CompareController {
       String rightText = getFileText(rightBytes, right.getOriginalFilename());
 
       if (leftText == null || rightText == null) {
+        log.info("[jarDiff][end] FuncName=CompareController.filesUnifiedDiff, result=EMPTY_NON_TEXT");
         return ResponseEntity.ok("");
       }
-      return ResponseEntity.ok(jarDiffService.unifiedDiff(leftText, rightText));
+      String diff = jarDiffService.unifiedDiff(leftText, rightText);
+      log.info("[jarDiff][end] FuncName=CompareController.filesUnifiedDiff, resultLength={}", diff != null ? diff.length() : 0);
+      return ResponseEntity.ok(diff);
     } catch (IOException e) {
-      log.error("filesUnifiedDiff error", e);
+      log.error("[jarDiff][fail] FuncName=CompareController.filesUnifiedDiff, errorCode=FILE_UNIFIED_IO_ERR, reason={}",
+          e.getMessage(), e);
       return ResponseEntity.ok("");
     }
   }
 
+  // [AGC:START] tool=Cc author=maxwell date=2026-07-24
   private String getFileText(byte[] bytes, String name) {
     if (bytes == null) return null;
     if (isClassFile(bytes)) {
@@ -486,6 +501,7 @@ public class CompareController {
         || lower.endsWith(".vm") || lower.endsWith(".ftl") || lower.endsWith(".sh")
         || lower.endsWith(".bat") || lower.endsWith(".py") || lower.endsWith(".rb");
   }
+  // [AGC:END]
 
   /**
    * 将字节数格式化为可读字符串（B/KB/MB/GB）。

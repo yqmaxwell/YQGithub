@@ -1,3 +1,4 @@
+;// [AGC:FILE] tool=Cc author=maxwell date=2026-07-24
 ;(function () {
   async function fetchJson(url, init) {
     const resp = await fetch(url, init)

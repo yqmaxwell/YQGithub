@@ -1,5 +1,7 @@
 package com.example.jardiff.core;
 
+// [AGC:FILE] tool=Cc author=maxwell date=2026-07-24
+
 import com.github.difflib.DiffUtils;
 import com.github.difflib.UnifiedDiffUtils;
 import com.github.difflib.patch.AbstractDelta;
@@ -99,6 +101,7 @@ public class JarDiffService {
     return computed;
   }
 
+  // [AGC:START] tool=Cc author=maxwell date=2026-07-24
   /**
    * 从已有比对会话中取出 diff 结果，用 java-diff-utils 生成 unified diff 文本。
    * 非文本文件（kind != "text"）或无结果时返回 null。
@@ -128,6 +131,7 @@ public class JarDiffService {
     List<String> unified = UnifiedDiffUtils.generateUnifiedDiff("a/file", "b/file", leftLines, patch, 3);
     return unified.isEmpty() ? null : String.join("\n", unified);
   }
+  // [AGC:END]
 
   public StoredCompare.WarmupStatus warmDiffs(String id, int limit) {
     StoredCompare stored = compareStore.get(id).orElseThrow(() -> new IllegalArgumentException("compare not found"));

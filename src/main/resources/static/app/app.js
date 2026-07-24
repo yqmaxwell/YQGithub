@@ -1,3 +1,4 @@
+;// [AGC:FILE] tool=Cc author=maxwell date=2026-07-24
 ;(function () {
   const { createApp, ref, reactive, computed, watch, nextTick, onMounted } = Vue
 
