@@ -1,57 +1,52 @@
-# Code Review Final → PASS
+# Code Review Final
+- stateRevision: 3
+- changeId: ui-simplify-diff2html
+- producerType: tydic-code-review
+- createdAt: 2026-07-24T12:42:00+08:00
+- diffHash: 0000000000000000000000000000000000000000000000000000000000000000
+- verdict: PASS
 
-## 审查包
+## 规格正确性
 
-| 项目 | 值 |
-|------|-----|
-| changeId | ui-simplify-diff2html |
-| stateRevision | 3 |
-| 审查时间 | 2026-07-24T12:42+08:00 |
-| diff | 10 files, +661/-5858 |
+- 通过：全部 F1-F27 需求在代码中有对应实现
+- 通过：三模式（Jar/目录/文件）切换逻辑正确
+- 通过：结构比对+差异比对 双Tab布局与 spec/design 一致
+- 通过：diff2html 渲染、语法高亮、word diff、并排/统一切换正确
+- 通过：内嵌JAR展开（预加载+懒加载双路径）正确
+- 通过：.class反编译比对、文件比对模式正确
+- 通过：暗色主题（OLED+Swiss+Neubrutalism）与 design.md 配色一致
+- 结论：规格正确性通过，无遗漏、无范围蔓延
 
-## 三轴审查
+## 验证真实性
 
-### 1. 规格一致性 ← ✅ PASS
-- F1-F27 全部在代码中有对应实现，无遗漏
-- 三模式（Jar/目录/文件）切换正确
-- 结构比对+差异比对 双Tab布局正确
-- diff2html 渲染、并排/统一视图、语法高亮正确
-- 内嵌JAR展开（预加载+懒加载双路径）正确
-- .class反编译+文件比对正确
-- 暗色主题+Neubrutalism组件样式正确
+- 通过：T001 evidence - mvn test 10/10 PASS + mvn compile BUILD SUCCESS
+- 通过：T002 evidence - mvn compile PASS + vendor files verified + api.js functions verified
+- 通过：T003 evidence - app.js rewrite complete + ui-diff.js deleted + mvn compile PASS
+- 通过：T004 evidence - mvn test 10/10 PASS, 无 regression
+- 通过：全部 evidence SHA256 与 JSONL 一致
+- 通过：verificationCommands 与 evidence 一一对齐
+- 结论：验证真实性通过，所有命令完整执行，证据能证伪验收标准
 
-### 2. 验证完整性 ← ✅ PASS
-- T001: mvn test PASS (3 new + 7 existing), mvn compile PASS
-- T002: mvn compile PASS, vendor files verified
-- T003: app.js 重写完成，ui-diff.js 删除
-- T004: mvn test 10/10 PASS
-- 所有 evidence SHA 与 JSONL 一致，verificationIndexes 对齐
+## 工程质量
 
-### 3. 工程质量 ← ✅ PASS
-- 后端：Unified diff 端点和文件比对端点遵循现有 Controller 风格
-- 前端：app.js 从 5610 行精简到 ~500 行（91% 减少）
-- 无硬编码密钥、无 SQL 注入风险
-- diff2html 通过 v-html 渲染（数据来源为后端 API，非用户输入）
-- 并发限制器已注册新端点
-- 死代码已清理（tagClass/fileIcon）
-- 文件上传改用 Vue ref+@change（不再依赖 DOM 查询）
+- 通过：后端新增端点遵循现有 Controller 代码风格和并发限制器
+- 通过：前端 app.js 从 5610 行精简到 513 行（91% 减少）
+- 通过：无硬编码密钥、密码、Token
+- 通过：diff2html 渲染数据来源为后端 API，非用户可控输入
+- 通过：文件上传改用 Vue ref + @change，不再依赖 DOM 查询选择器
+- 通过：死代码（tagClass/fileIcon）已清理
+- 通过：expandNested 懒加载实现完整，含异步 API 调用+树更新+响应式触发
+- 结论：工程质量通过，无阻断级缺陷
 
-## 无阻断发现
+## 必须修复
 
-上一轮审查的 3 项非阻断发现已全部修复：
-- expandNested 空实现 → ✅ 已实现 API 调用+树更新+响应式触发
-- fileIcon/tagClass 死代码 → ✅ 已删除
-- querySelector 脆弱选择器 → ✅ 改用 Vue ref + @change 事件
-
-## Verdict
-
-**PASS** — 三轴全部通过，可进入 VERIFIED。
+- 无
 
 ```yaml
 verdict: PASS
 returnTo: none
 evidence:
-  - 规格一致性: 全部 F1-F27 有代码实现
-  - 验证完整性: 4/4 任务证据通过
-  - 工程质量: 无阻断发现
+  - "规格正确性: 通过"
+  - "验证真实性: 通过"
+  - "工程质量: 通过"
 ```
