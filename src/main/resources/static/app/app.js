@@ -6,14 +6,6 @@
     return { modified: 'tree-badge--modified', added: 'tree-badge--added', missing: 'tree-badge--missing', meta: 'tree-badge--meta' }[status] || ''
   }
 
-  function tagClass(status) {
-    return { modified: 'nbt-tag--modified', added: 'nbt-tag--added', missing: 'nbt-tag--missing', meta: 'nbt-tag--meta' }[status] || ''
-  }
-
-  function fileIcon(status) {
-    return { modified: '🟡', added: '🟢', missing: '🔴', meta: '🔵' }[status] || '⚪'
-  }
-
   const app = createApp({
     template: /*html*/`
     <div id="app-root" style="display:flex;flex-direction:column;min-height:100vh">
@@ -24,12 +16,12 @@
           <button v-for="m in modes" :key="m.value" :class="['mode-tab', { 'mode-tab--active': mode === m.value }]" @click="switchMode(m.value)">{{ m.label }}</button>
         </div>
         <span style="flex:0 0 4px"></span>
-        <el-upload v-if="mode==='jar'" :auto-upload="false" :limit="1" class="toolbar__file"><el-button class="nbt-btn" size="small">旧版 Jar</el-button></el-upload>
-        <el-upload v-if="mode==='jar'" :auto-upload="false" :limit="1" class="toolbar__file"><el-button class="nbt-btn" size="small">新版 Jar</el-button></el-upload>
+        <el-upload v-if="mode==='jar'" :auto-upload="false" :limit="1" class="toolbar__file" @change="onJarLeftChange"><el-button class="nbt-btn" size="small">旧版 Jar</el-button></el-upload>
+        <el-upload v-if="mode==='jar'" :auto-upload="false" :limit="1" class="toolbar__file" @change="onJarRightChange"><el-button class="nbt-btn" size="small">新版 Jar</el-button></el-upload>
         <span v-if="mode==='dir'" class="toolbar__file"><el-input v-model="dirLeft" placeholder="旧版目录路径" size="small" /></span>
         <span v-if="mode==='dir'" class="toolbar__file"><el-input v-model="dirRight" placeholder="新版目录路径" size="small" /></span>
-        <el-upload v-if="mode==='file'" :auto-upload="false" :limit="1"><el-button class="nbt-btn" size="small">旧版文件</el-button></el-upload>
-        <el-upload v-if="mode==='file'" :auto-upload="false" :limit="1"><el-button class="nbt-btn" size="small">新版文件</el-button></el-upload>
+        <el-upload v-if="mode==='file'" :auto-upload="false" :limit="1" @change="onFileLeftChange"><el-button class="nbt-btn" size="small">旧版文件</el-button></el-upload>
+        <el-upload v-if="mode==='file'" :auto-upload="false" :limit="1" @change="onFileRightChange"><el-button class="nbt-btn" size="small">新版文件</el-button></el-upload>
         <el-input v-model="ignoreGlobs" placeholder="忽略规则" size="small" class="toolbar__ignore" />
         <button class="nbt-btn nbt-btn--primary" @click="startCompare" :disabled="comparing">{{ comparing ? '比对中...' : '开始比对' }}</button>
         <button class="nbt-btn" @click="showSettings=!showSettings" style="margin-left:auto" title="高级设置">⚙</button>
@@ -254,6 +246,10 @@
       var structureFull = ref(false)
       var comparing = ref(false)
       var leftWidth = ref(400)
+      var jarLeftFile = ref(null)
+      var jarRightFile = ref(null)
+      var fileLeftFile = ref(null)
+      var fileRightFile = ref(null)
       var resize = reactive({ done: true, x: 0, w: 0 })
       var showSettings = ref(false)
       var setting = reactive({
@@ -313,6 +309,11 @@
         JarDiff.storage.set('mode', m)
       }
 
+      function onJarLeftChange(file) { jarLeftFile.value = file && file.raw }
+      function onJarRightChange(file) { jarRightFile.value = file && file.raw }
+      function onFileLeftChange(file) { fileLeftFile.value = file && file.raw }
+      function onFileRightChange(file) { fileRightFile.value = file && file.raw }
+
       function startCompare() {
         comparing.value = true
         var onDone = function (err, result) {
@@ -333,15 +334,10 @@
           }
         }
         if (mode.value === 'jar') {
-          // Get files from el-upload refs
-          var uploads = document.querySelectorAll('.toolbar .el-upload input[type=file]')
-          if (!uploads || uploads.length < 2) { comparing.value = false; return }
-          var leftFile = uploads[0].files[0]
-          var rightFile = uploads[1].files[0]
-          if (!leftFile || !rightFile) { comparing.value = false; return }
+          if (!jarLeftFile.value || !jarRightFile.value) { comparing.value = false; return }
           var fd = new FormData()
-          fd.append('leftJar', leftFile)
-          fd.append('rightJar', rightFile)
+          fd.append('leftJar', jarLeftFile.value)
+          fd.append('rightJar', jarRightFile.value)
           fd.append('includeLib', setting.includeLib)
           fd.append('includeClasses', setting.includeClasses)
           fd.append('includeResources', setting.includeResources)
@@ -354,14 +350,10 @@
           if (!leftPath || !rightPath) { comparing.value = false; return }
           JarDiff.api.compareDirectoryByPath(leftPath, rightPath).then(onDone.bind(null, null)).catch(onDone)
         } else if (mode.value === 'file') {
-          var fu = document.querySelectorAll('.toolbar .el-upload input[type=file]')
-          if (!fu || fu.length < 2) { comparing.value = false; return }
-          var lf = fu[0].files[0]
-          var rf = fu[1].files[0]
-          if (!lf || !rf) { comparing.value = false; return }
+          if (!fileLeftFile.value || !fileRightFile.value) { comparing.value = false; return }
           var ffd = new FormData()
-          ffd.append('left', lf)
-          ffd.append('right', rf)
+          ffd.append('left', fileLeftFile.value)
+          ffd.append('right', fileRightFile.value)
           JarDiff.api.compareFiles(ffd, null).then(function (r) { onDone(null, r) }).catch(onDone)
         }
       }
@@ -440,8 +432,22 @@
       }
 
       function expandNested(path) {
-        // Load nested JAR content - use existing loadUnifiedDiff for now
-        // The tree structure is already populated from compareJars
+        JarDiff.api.loadNestedTree(compareId.value, path).then(function (nodes) {
+          if (!nodes || !nodes.length) return
+          function update(search) {
+            for (var i = 0; search && i < search.length; i++) {
+              if (search[i].value === path) {
+                search[i].children = nodes
+                search[i].expanded = true
+                return true
+              }
+              if (search[i].children && update(search[i].children)) return true
+            }
+            return false
+          }
+          update(treeData.value)
+          treeData.value = treeData.value.slice()
+        })
       }
 
       function startResize(e) {
@@ -484,7 +490,8 @@
         diffHtml, diffLoading, diffError, leftTab, viewMode, searchQuery, statusFilter,
         structureFull, comparing, leftWidth, showSettings, setting, stats, filteredTree,
         switchMode, startCompare, selectFile, selectFileFromStruct, navigateHunk,
-        loadFileDiff, expandNested, startResize, doResize, stopResize
+        loadFileDiff, expandNested, startResize, doResize, stopResize,
+        onJarLeftChange, onJarRightChange, onFileLeftChange, onFileRightChange
       }
     }
   })
