@@ -233,7 +233,7 @@
       var mode = ref(JarDiff.storage.get('mode') || 'jar')
       var modes = [{ value: 'jar', label: 'Jar' }, { value: 'dir', label: '目录' }, { value: 'file', label: '文件' }]
       var dirLeft = ref(''), dirRight = ref('')
-      var ignoreGlobs = ref(JarDiff.storage.get('ignore') || JarDiff.core.getDefaultIgnoreSpringBoot())
+      var ignoreGlobs = ref(JarDiff.storage.get('ignore') || JarDiff.core.DEFAULT_IGNORE_SPRINGBOOT || '')
       var compareId = ref(JarDiff.storage.get('compareId') || '')
       var treeData = ref([])
       var selectedPath = ref(null)
