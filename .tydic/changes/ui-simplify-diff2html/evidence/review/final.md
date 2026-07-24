@@ -38,6 +38,7 @@
 
 ```yaml
 gate: semantic-review
+changeId: ui-simplify-diff2html
 verdict: PASS
 returnTo: none
 blockers: []
