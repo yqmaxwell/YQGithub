@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "stateRevision": 1,
+  "stateRevision": 2,
   "changeId": "ui-simplify-diff2html",
   "businessTopic": "页面简化与 diff2html 差异展示优化",
   "state": "CODING",
@@ -230,7 +230,7 @@
         "evidenceStateRevision": 1
       },
       "T003": {
-        "status": "PENDING",
+        "status": "CLAIMED",
         "prerequisites": [
           "T001",
           "T002"
@@ -264,7 +264,22 @@
           "test -f src/main/resources/static/app/app.js"
         ],
         "evidence": [],
-        "modifiedFiles": []
+        "modifiedFiles": [],
+        "claimedAt": "2026-07-24T10:59:27+08:00",
+        "workspaceBaseline": {
+          "root": "/Users/maxwell/Documents/code_project/TraeProject/代码差异比对及分析_V0.1",
+          "fingerprint": "1d456e57ebc815bcd83150ec32199f6e5aba014676dd197e0e0bc5676f863013",
+          "entries": {
+            "src/main/resources/static/app/app.js": {
+              "sha256": "e12d53c0994371620e902062915843794d11bc247979428a5e40e4ffe2d2af3c"
+            },
+            "src/main/resources/static/app/ui-diff.js": {
+              "sha256": "18192ccaec9b0acddbf8bf8e9bd7fc0757df01c22c468d055371793d5eec3582"
+            }
+          },
+          "snapshotVersion": 2,
+          "outsideFingerprint": "ede364bd40b739e580944db144954eb3eae7df3089f4312d7e2df05f48fa00ba"
+        }
       },
       "T004": {
         "status": "PENDING",
