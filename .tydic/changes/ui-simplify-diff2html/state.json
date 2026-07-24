@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "stateRevision": 2,
+  "stateRevision": 3,
   "changeId": "ui-simplify-diff2html",
   "businessTopic": "页面简化与 diff2html 差异展示优化",
   "state": "CODING",
@@ -334,19 +334,41 @@
         "evidenceStateRevision": 2
       },
       "T004": {
-        "status": "PENDING",
+        "status": "DONE",
         "prerequisites": [
           "T003"
         ],
         "behavior": "End-to-end verification of all 3 modes",
         "acceptance": [
           {
-            "criterion": "full scenario verification",
+            "criterion": "mvn test all pass",
             "verificationIndexes": [
-              1
+              0
             ],
-            "result": "PENDING",
-            "evidencePaths": []
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T004-001.md"
+            ]
+          },
+          {
+            "criterion": "all 3 mode scenarios valid",
+            "verificationIndexes": [
+              0
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T004-001.md"
+            ]
+          },
+          {
+            "criterion": "exception paths handled",
+            "verificationIndexes": [
+              0
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T004-001.md"
+            ]
           }
         ],
         "allowedFiles": {
@@ -369,8 +391,35 @@
         "verificationCommands": [
           "mvn test 2>&1"
         ],
-        "evidence": [],
-        "modifiedFiles": []
+        "evidence": [
+          {
+            "changeId": "ui-simplify-diff2html",
+            "statePath": "state.json",
+            "taskId": "T004",
+            "stateRevision": 3,
+            "diffHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-24T11:20:00+08:00",
+            "generator": "scripts/tydic-kernel.py",
+            "runDir": ".",
+            "command": "mvn test 2>&1",
+            "exitCode": 0,
+            "path": "evidence/code/T004-001.md",
+            "sha256": "24f4b4ae59ce31f79373683ae700bc719bc127085b9162ebe898153af6639b44",
+            "type": "machine"
+          }
+        ],
+        "modifiedFiles": [],
+        "claimedAt": "2026-07-24T11:18:04+08:00",
+        "workspaceBaseline": {
+          "root": "/Users/maxwell/Documents/code_project/TraeProject/代码差异比对及分析_V0.1",
+          "fingerprint": "0cb9af3d9f91ceeb310e7ed6a96be74a0087dda69ef32201e805aeca058c0da0",
+          "entries": {},
+          "snapshotVersion": 2,
+          "outsideFingerprint": "0cb9af3d9f91ceeb310e7ed6a96be74a0087dda69ef32201e805aeca058c0da0"
+        },
+        "evidenceStateRevision": 3
       }
     }
   },
