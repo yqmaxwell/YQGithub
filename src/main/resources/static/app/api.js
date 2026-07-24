@@ -106,6 +106,36 @@
     return await fetchJson(url)
   }
 
+  /**
+   * 获取统一差异格式文本，供 diff2html 渲染。
+   */
+  async function loadUnifiedDiff(id, path) {
+    const url =
+      '/api/compare/diff/unified?id=' + encodeURIComponent(id) + '&path=' + encodeURIComponent(path || '')
+    const resp = await fetch(url)
+    if (!resp.ok) throw new Error('请求失败：' + resp.status)
+    return await resp.text()
+  }
+
+  /**
+   * 上传两个文件进行比对（支持 .class 反编译）。
+   */
+  async function compareFiles(fd, onProgress) {
+    return await uploadJson('/api/compare/files', fd, onProgress)
+  }
+
+  /**
+   * 直接获取两个文件比对的统一差异格式文本。
+   */
+  async function loadFilesUnifiedDiff(leftFile, rightFile) {
+    const fd = new FormData()
+    fd.append('left', leftFile)
+    fd.append('right', rightFile)
+    const resp = await fetch('/api/compare/files/unified', { method: 'POST', body: fd })
+    if (!resp.ok) throw new Error('请求失败：' + resp.status)
+    return await resp.text()
+  }
+
   window.JarDiff = window.JarDiff || {}
   window.JarDiff.api = {
     compareJars,
@@ -117,6 +147,9 @@
     warmDiffStatus,
     getLimits,
     loadReportV2,
-    loadNestedTree
+    loadNestedTree,
+    loadUnifiedDiff,
+    compareFiles,
+    loadFilesUnifiedDiff
   }
 })()

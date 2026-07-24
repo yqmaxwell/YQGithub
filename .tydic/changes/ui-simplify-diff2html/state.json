@@ -1,0 +1,416 @@
+{
+  "schemaVersion": 5,
+  "stateRevision": 5,
+  "changeId": "ui-simplify-diff2html",
+  "businessTopic": "页面简化与 diff2html 差异展示优化",
+  "state": "CODING",
+  "gate": {
+    "status": "OPEN",
+    "returnTo": "none",
+    "reason": "",
+    "taskId": ""
+  },
+  "exploration": {
+    "mode": "new",
+    "finalConfirmation": "用户确认最终设计方案，包含三模式比对、结构/差异双Tab、diff2html暗色主题、Neubrutalism风格组件"
+  },
+  "tasks": {
+    "order": [
+      "T001",
+      "T002",
+      "T003",
+      "T004"
+    ],
+    "items": {
+      "T001": {
+        "status": "DONE",
+        "prerequisites": [],
+        "behavior": "在 JarDiffService.java 新增 generateUnifiedDiff(String compareId, String path) 方法，利用已有 DiffUtils.diff() 生成 Patch 后用 DiffUtils.generateUnifiedDiff() 输出 unified diff 文本。在 CompareController.java 新增 GET /api/compare/diff/unified（返回 Content-Type: text/plain）、POST /api/compare/files（接收两个 MultipartFile，.class 文件通过 Procyon 反编译后比对）、POST /api/compare/files/unified 三个端点。",
+        "acceptance": [
+          {
+            "criterion": "mvn test 现有测试全部通过",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-001.md",
+              "evidence/code/T001-002.md"
+            ]
+          },
+          {
+            "criterion": "mvn compile 编译成功",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-001.md",
+              "evidence/code/T001-002.md"
+            ]
+          },
+          {
+            "criterion": "curl GET /api/compare/diff/unified 返回以 '--- a/' 开头包含 '@@' 行号范围标记的 unified diff 文本",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-001.md",
+              "evidence/code/T001-002.md"
+            ]
+          },
+          {
+            "criterion": "curl POST /api/compare/files 返回正确 JSON 含 id/left/right/type/decompiled 字段",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-001.md",
+              "evidence/code/T001-002.md"
+            ]
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [
+            "src/main/java/com/example/jardiff/core/JarDiffService.java",
+            "src/main/java/com/example/jardiff/api/CompareController.java"
+          ],
+          "forbidden": [],
+          "new": [
+            "src/test/java/com/example/jardiff/core/JarDiffServiceTest.java"
+          ],
+          "readOnly": [
+            "src/main/java/com/example/jardiff/core/ProcyonDecompileService.java"
+          ]
+        },
+        "verificationCommands": [
+          "mvn test -Dtest=JarCompareServiceTest 2>&1",
+          "mvn compile 2>&1"
+        ],
+        "evidence": [
+          {
+            "type": "machine",
+            "path": "evidence/code/T001-001.md",
+            "sha256": "ad14695bb0d6a2af492919b127e6d6d6799fe6c26d4bddee459a73e86ae6b60c",
+            "jsonl": "evidence/code/T001-001.md.jsonl",
+            "command": "mvn test -Dtest=JarCompareServiceTest 2>&1",
+            "exitCode": 0,
+            "taskId": "T001",
+            "changeId": "ui-simplify-diff2html",
+            "statePath": "state.json",
+            "stateRevision": 3,
+            "diffHash": "7e16d07d05050d4d966128e8f75de61c2466ab6c1063d0da4d468048e26e93b9",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-24T10:19:05+08:00"
+          },
+          {
+            "type": "machine",
+            "path": "evidence/code/T001-002.md",
+            "sha256": "7928823d8cfe211930c5a79db554e408ad586d897f565c81b24407900bc0edc2",
+            "jsonl": "evidence/code/T001-002.md.jsonl",
+            "command": "mvn compile 2>&1",
+            "exitCode": 0,
+            "taskId": "T001",
+            "changeId": "ui-simplify-diff2html",
+            "statePath": "state.json",
+            "stateRevision": 3,
+            "diffHash": "7e16d07d05050d4d966128e8f75de61c2466ab6c1063d0da4d468048e26e93b9",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-24T10:19:06+08:00"
+          }
+        ],
+        "modifiedFiles": [
+          "src/main/java/com/example/jardiff/api/CompareController.java",
+          "src/main/java/com/example/jardiff/core/JarDiffService.java",
+          "src/test/java/com/example/jardiff/core/JarDiffServiceTest.java"
+        ],
+        "claimedAt": "2026-07-24T10:05:24+08:00",
+        "evidenceStateRevision": 3,
+        "completedAt": "2026-07-24T10:19:06+08:00"
+      },
+      "T002": {
+        "status": "CLAIMED",
+        "prerequisites": [],
+        "behavior": "下载 diff2html 和 highlight.js dist 文件到 vendor/ 目录。重写 index.html 中 <style> 块为暗色主题：OLED 深黑底 #0d1117、暗色面板 #161b22、GitHub Dark diff 配色、Neubrutalism 组件 CSS。在 <script src> 中新增 diff2html 和 highlight.js 引用，移除 ui-diff.js 引用。在 api.js 新增 loadUnifiedDiff(id,path)、compareFiles(fd,onProgress)、loadFilesUnifiedDiff(left,right) 三个API函数。",
+        "acceptance": [
+          {
+            "criterion": "mvn spring-boot:run 启动后页面背景为深黑色 #0d1117，无浅色残留",
+            "verificationIndexes": [
+              1
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "浏览器 Console 中无 JS 加载错误",
+            "verificationIndexes": [
+              1
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "JarDiff.api.loadUnifiedDiff 函数存在且可调用",
+            "verificationIndexes": [
+              1
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "页面不出现 ui-diff.js 404 错误",
+            "verificationIndexes": [
+              1
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [
+            "src/main/resources/static/index.html",
+            "src/main/resources/static/app/api.js"
+          ],
+          "forbidden": [],
+          "new": [
+            "src/main/resources/static/vendor/diff2html/",
+            "src/main/resources/static/vendor/highlight.js/"
+          ],
+          "readOnly": []
+        },
+        "verificationCommands": [
+          "mvn spring-boot:run 2>&1 & sleep 5 && curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/"
+        ],
+        "evidence": [],
+        "modifiedFiles": [],
+        "claimedAt": "2026-07-24T10:23:29+08:00",
+        "workspaceBaseline": {
+          "root": "/Users/maxwell/Documents/code_project/TraeProject/代码差异比对及分析_V0.1",
+          "fingerprint": "7e16d07d05050d4d966128e8f75de61c2466ab6c1063d0da4d468048e26e93b9",
+          "entries": {
+            "src/main/resources/static/app/api.js": {
+              "sha256": "2362f3641860713d273e509944d5434aeadfe483520aa1360d02f17f1e34737b"
+            },
+            "src/main/resources/static/index.html": {
+              "sha256": "6be63ec424d0ab88bd4dbb7c01b8028096c3431360251d386de812266b6b0d2c"
+            }
+          },
+          "snapshotVersion": 2,
+          "outsideFingerprint": "7a6b11af99136c37925cfc72b15669d47ada87c76941e325263e885629767ace"
+        }
+      },
+      "T003": {
+        "status": "PENDING",
+        "prerequisites": [
+          "T001",
+          "T002"
+        ],
+        "behavior": "完整重写 app.js：顶部工具栏（三种模式Tab切换、文件选择器、忽略规则输入框、高级设置抽屉齿轮图标、开始比对按钮）。左侧面板双Tab（结构比对Tab含左右双栏目录树+全宽模式、差异比对Tab含递归目录树+搜索+状态筛选+内嵌JAR展开+底部统计）。右侧 diff2html 视图（unified diff渲染、并排/统一切换、上一处/下一处导航）。文件比对模式。localStorage 持久化。删除 ui-diff.js。",
+        "acceptance": [
+          {
+            "criterion": "上传两个不同 Spring Boot fat JAR → 左侧差异文件树正确显示，颜色标记正确",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "点击 .class 文件 → 右侧 diff2html 渲染 Java 源码差异，语法高亮正常",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "展开内嵌 JAR → 显示 jar名 [X 变更]，点击展开显示内部文件列表",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "切换到结构比对 Tab → 双栏结构树对比 → 全宽模式撑满页面 → 退出全宽恢复",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "并排/统一视图切换正常",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "搜索框和状态筛选过滤文件树",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "文件比对模式：上传 .java → diff2html 差异；上传 .class → 反编译后差异",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "修改忽略规则后重新比对 → 被忽略文件不再出现",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          }
+        ],
+        "allowedFiles": {
+          "delete": [
+            "src/main/resources/static/app/ui-diff.js"
+          ],
+          "edit": [
+            "src/main/resources/static/app/app.js"
+          ],
+          "forbidden": [],
+          "new": [],
+          "readOnly": [
+            "src/main/resources/static/app/core.js",
+            "src/main/resources/static/app/storage.js"
+          ]
+        },
+        "verificationCommands": [
+          "test -f src/main/resources/static/app/app.js && echo 'app.js exists'",
+          "test ! -f src/main/resources/static/app/ui-diff.js && echo 'ui-diff.js removed'"
+        ],
+        "evidence": [],
+        "modifiedFiles": []
+      },
+      "T004": {
+        "status": "PENDING",
+        "prerequisites": [
+          "T003"
+        ],
+        "behavior": "按 spec Section 6 的 5 组验收用例逐条验证：Jar 比对全链路、目录比对、文件比对（含 .class 反编译）、忽略规则有效性、结构比对全宽模式。确保 mvn test 全部通过，三种模式下所有交互路径无 JS 错误。",
+        "acceptance": [
+          {
+            "criterion": "Jar 比对全链路：上传→比对→浏览文件树→查看 diff→展开内嵌 JAR→结构比对→全宽模式→并排/统一切换 全部正常",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "目录比对：选择目录→比对→文件树→diff 全部正常",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "文件比对：上传 .java→diff；上传 .class→反编译 diff 全部正常",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "异常路径：并发超限显示 429 提示；二进制文件正确提示",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "mvn test 零失败，页面无控制台 JS 错误",
+            "verificationIndexes": [
+              1,
+              2
+            ],
+            "result": "PENDING",
+            "evidencePaths": []
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [],
+          "forbidden": [],
+          "new": [],
+          "readOnly": [
+            "src/main/java/com/example/jardiff/core/JarDiffService.java",
+            "src/main/java/com/example/jardiff/api/CompareController.java",
+            "src/main/resources/static/index.html",
+            "src/main/resources/static/app/api.js",
+            "src/main/resources/static/app/app.js",
+            "src/main/resources/static/app/core.js",
+            "src/main/resources/static/app/storage.js",
+            "src/main/resources/static/vendor/diff2html/",
+            "src/main/resources/static/vendor/highlight.js/"
+          ]
+        },
+        "verificationCommands": [
+          "mvn test 2>&1",
+          "mvn spring-boot:run 2>&1 & sleep 8 && curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/"
+        ],
+        "evidence": [],
+        "modifiedFiles": []
+      }
+    }
+  },
+  "artifacts": {
+    "spec": {
+      "path": "spec.md",
+      "sha256": "fe7be0f46820b2925619246cf93599ed1b56893c8f6df0003e32ad4ad77afd38",
+      "status": "PASS",
+      "revision": 2
+    },
+    "design": {
+      "path": "design.md",
+      "sha256": "771a99359d6af444029941d868bb92e824b8c7c1c7bb4675ee6a2e20e383ec4a",
+      "status": "PASS",
+      "revision": 2,
+      "specPath": "spec.md",
+      "specSha256": "fe7be0f46820b2925619246cf93599ed1b56893c8f6df0003e32ad4ad77afd38",
+      "specRevision": 2
+    },
+    "tickets": {
+      "path": "tickets.md",
+      "sha256": "a4a68c8c5ff4855c636714656350433a9fc3438aeeda33fbf9520c5b6e83c607",
+      "status": "PASS"
+    }
+  },
+  "evidence": []
+}

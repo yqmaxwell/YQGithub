@@ -1,6 +1,7 @@
 package com.example.jardiff.core;
 
 import com.github.difflib.DiffUtils;
+import com.github.difflib.UnifiedDiffUtils;
 import com.github.difflib.patch.AbstractDelta;
 import com.github.difflib.patch.Patch;
 import java.io.ByteArrayOutputStream;
@@ -13,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.HashMap;
@@ -95,6 +97,36 @@ public class JarDiffService {
         computed != null && computed.isMissingLeft(),
         computed != null && computed.isMissingRight());
     return computed;
+  }
+
+  /**
+   * 从已有比对会话中取出 diff 结果，用 java-diff-utils 生成 unified diff 文本。
+   * 非文本文件（kind != "text"）或无结果时返回 null。
+   */
+  public String generateUnifiedDiff(String id, String path) {
+    DiffResult result = diff(id, path);
+    if (result == null || !"text".equals(result.getKind())) {
+      return null;
+    }
+    List<String> leftLines = result.getLeft() != null ? result.getLeft() : Collections.emptyList();
+    List<String> rightLines = result.getRight() != null ? result.getRight() : Collections.emptyList();
+    Patch<String> patch = DiffUtils.diff(leftLines, rightLines);
+    List<String> unified = UnifiedDiffUtils.generateUnifiedDiff(
+        "a/" + path, "b/" + path, leftLines, patch, 3);
+    return unified.isEmpty() ? null : String.join("\n", unified);
+  }
+
+  /**
+   * 直接从两段文本生成 unified diff，不需要比对会话。
+   */
+  public String unifiedDiff(String leftText, String rightText) {
+    if (leftText == null) leftText = "";
+    if (rightText == null) rightText = "";
+    List<String> leftLines = Arrays.asList(leftText.split("\n", -1));
+    List<String> rightLines = Arrays.asList(rightText.split("\n", -1));
+    Patch<String> patch = DiffUtils.diff(leftLines, rightLines);
+    List<String> unified = UnifiedDiffUtils.generateUnifiedDiff("a/file", "b/file", leftLines, patch, 3);
+    return unified.isEmpty() ? null : String.join("\n", unified);
   }
 
   public StoredCompare.WarmupStatus warmDiffs(String id, int limit) {

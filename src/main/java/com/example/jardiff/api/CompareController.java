@@ -4,9 +4,11 @@ import com.example.jardiff.core.CompareOptions;
 import com.example.jardiff.core.CompareResult;
 import com.example.jardiff.core.CompareStore;
 import com.example.jardiff.core.DiffResult;
+import com.example.jardiff.core.DigestService;
 import com.example.jardiff.core.DirectorySummaryResult;
 import com.example.jardiff.core.JarCompareService;
 import com.example.jardiff.core.JarDiffService;
+import com.example.jardiff.core.ProcyonDecompileService;
 import com.example.jardiff.core.Stats;
 import com.example.jardiff.core.StoredCompare;
 import com.example.jardiff.core.TreeNode;
@@ -55,16 +57,21 @@ public class CompareController {
   private final JarCompareService jarCompareService;
   private final JarDiffService jarDiffService;
   private final CompareStore compareStore;
+  private final ProcyonDecompileService procyonDecompileService;
+  private final DigestService digestService;
   private final int maxJarMb;
   private final int maxDirFilesPerSide;
   private final int maxDirMbPerSide;
   private final int maxWarmupDiffs;
   private final int defaultWarmupDiffs;
+  private final Map<String, String> fileTextCache = new HashMap<>();
 
   public CompareController(
       JarCompareService jarCompareService,
       JarDiffService jarDiffService,
       CompareStore compareStore,
+      ProcyonDecompileService procyonDecompileService,
+      DigestService digestService,
       @Value("${jardiff.limits.max-jar-mb:512}") int maxJarMb,
       @Value("${jardiff.limits.max-dir-files-per-side:20000}") int maxDirFilesPerSide,
       @Value("${jardiff.limits.max-dir-mb-per-side:800}") int maxDirMbPerSide,
@@ -73,6 +80,8 @@ public class CompareController {
     this.jarCompareService = jarCompareService;
     this.jarDiffService = jarDiffService;
     this.compareStore = compareStore;
+    this.procyonDecompileService = procyonDecompileService;
+    this.digestService = digestService;
     this.maxJarMb = Math.max(1, maxJarMb);
     this.maxDirFilesPerSide = Math.max(1, maxDirFilesPerSide);
     this.maxDirMbPerSide = Math.max(1, maxDirMbPerSide);
@@ -153,6 +162,16 @@ public class CompareController {
         result != null && result.isMissingLeft(),
         result != null && result.isMissingRight());
     return result;
+  }
+
+  @GetMapping(value = "/compare/diff/unified", produces = MediaType.TEXT_PLAIN_VALUE)
+  public ResponseEntity<String> unifiedDiff(@RequestParam("id") String id, @RequestParam("path") String path) {
+    log.info("unifiedDiff start id={} path={}", id, path);
+    String unified = jarDiffService.generateUnifiedDiff(id, path);
+    if (unified == null) {
+      return ResponseEntity.ok("");
+    }
+    return ResponseEntity.ok(unified);
   }
 
   @PostMapping("/compare/diff/warm")
@@ -373,6 +392,99 @@ public class CompareController {
         || c == '\u200C'
         || c == '\u200D'
         || c == '\uFEFF';
+  }
+
+  @PostMapping(value = "/compare/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public Map<String, Object> compareFiles(
+      @RequestParam("left") MultipartFile left,
+      @RequestParam("right") MultipartFile right) {
+    log.info("compareFiles start left={} right={}", left.getOriginalFilename(), right.getOriginalFilename());
+    Map<String, Object> res = new HashMap<>();
+    try {
+      byte[] leftBytes = left.getBytes();
+      byte[] rightBytes = right.getBytes();
+      String leftText = getFileText(leftBytes, left.getOriginalFilename());
+      String rightText = getFileText(rightBytes, right.getOriginalFilename());
+      boolean decompiled = isClassFile(leftBytes) || isClassFile(rightBytes);
+
+      String id = java.util.UUID.randomUUID().toString().replace("-", "");
+      String leftName = left.getOriginalFilename() != null ? left.getOriginalFilename() : "left";
+      String rightName = right.getOriginalFilename() != null ? right.getOriginalFilename() : "right";
+      String leftMd5 = digestService.md5(leftBytes);
+      String rightMd5 = digestService.md5(rightBytes);
+
+      res.put("id", id);
+      Map<String, String> leftMeta = new HashMap<>();
+      leftMeta.put("name", leftName);
+      leftMeta.put("md5", leftMd5);
+      res.put("left", leftMeta);
+      Map<String, String> rightMeta = new HashMap<>();
+      rightMeta.put("name", rightName);
+      rightMeta.put("md5", rightMd5);
+      res.put("right", rightMeta);
+      res.put("type", "text");
+      res.put("decompiled", decompiled);
+
+      fileTextCache.put(id + ":left", leftText);
+      fileTextCache.put(id + ":right", rightText);
+    } catch (IOException e) {
+      log.error("compareFiles error", e);
+      res.put("error", e.getMessage());
+    }
+    return res;
+  }
+
+  @PostMapping(value = "/compare/files/unified", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ResponseEntity<String> filesUnifiedDiff(
+      @RequestParam("left") MultipartFile left,
+      @RequestParam("right") MultipartFile right) {
+    log.info("filesUnifiedDiff start left={} right={}", left.getOriginalFilename(), right.getOriginalFilename());
+    try {
+      byte[] leftBytes = left.getBytes();
+      byte[] rightBytes = right.getBytes();
+      String leftText = getFileText(leftBytes, left.getOriginalFilename());
+      String rightText = getFileText(rightBytes, right.getOriginalFilename());
+
+      if (leftText == null || rightText == null) {
+        return ResponseEntity.ok("");
+      }
+      return ResponseEntity.ok(jarDiffService.unifiedDiff(leftText, rightText));
+    } catch (IOException e) {
+      log.error("filesUnifiedDiff error", e);
+      return ResponseEntity.ok("");
+    }
+  }
+
+  private String getFileText(byte[] bytes, String name) {
+    if (bytes == null) return null;
+    if (isClassFile(bytes)) {
+      return procyonDecompileService.decompileToText(bytes);
+    }
+    if (isLikelyTextFile(name)) {
+      return new String(bytes, StandardCharsets.UTF_8);
+    }
+    return null;
+  }
+
+  private boolean isClassFile(byte[] bytes) {
+    return bytes != null && bytes.length >= 4
+        && (bytes[0] & 0xFF) == 0xCA
+        && (bytes[1] & 0xFF) == 0xFE
+        && (bytes[2] & 0xFF) == 0xBA
+        && (bytes[3] & 0xFF) == 0xBE;
+  }
+
+  private boolean isLikelyTextFile(String name) {
+    if (name == null) return false;
+    String lower = name.toLowerCase();
+    return lower.endsWith(".java") || lower.endsWith(".xml") || lower.endsWith(".properties")
+        || lower.endsWith(".yml") || lower.endsWith(".yaml") || lower.endsWith(".json")
+        || lower.endsWith(".html") || lower.endsWith(".js") || lower.endsWith(".css")
+        || lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".sql")
+        || lower.endsWith(".kt") || lower.endsWith(".scala") || lower.endsWith(".groovy")
+        || lower.endsWith(".gradle") || lower.endsWith(".mf") || lower.endsWith(".jsp")
+        || lower.endsWith(".vm") || lower.endsWith(".ftl") || lower.endsWith(".sh")
+        || lower.endsWith(".bat") || lower.endsWith(".py") || lower.endsWith(".rb");
   }
 
   /**
@@ -944,6 +1056,7 @@ class CompareConcurrencyFilter extends OncePerRequestFilter {
     return "/api/compare/jars".equals(uri)
         || "/api/compare/directory".equals(uri)
         || "/api/compare/directory/path".equals(uri)
-        || "/api/compare/directory/summary".equals(uri);
+        || "/api/compare/directory/summary".equals(uri)
+        || "/api/compare/files".equals(uri);
   }
 }
