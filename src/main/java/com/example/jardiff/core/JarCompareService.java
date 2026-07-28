@@ -731,7 +731,41 @@ public class JarCompareService {
     }
 
     sortChildren(root);
+    computeInnerChanges(root, options);
     return new CompareResultWithStats(root.getChildren(), counter.toStats());
+  }
+
+  /**
+   * 为 jar 类型节点计算内部变更数：统计其 !/ 子路径中非 unchanged 的文件数。
+   */
+  private void computeInnerChanges(TreeNode node, CompareOptions options) {
+    if (node == null || node.getChildren() == null) return;
+    for (TreeNode child : node.getChildren()) {
+      if ("jar".equals(child.getType())) {
+        int count = countInnerChanges(child.getChildren(), child.getValue());
+        child.setInnerChanges(count);
+      }
+      computeInnerChanges(child, options);
+    }
+  }
+
+  private int countInnerChanges(List<TreeNode> children, String jarPrefix) {
+    if (children == null || jarPrefix == null) return 0;
+    int count = 0;
+    String prefix = jarPrefix + "!/";
+    for (TreeNode child : children) {
+      if (child == null) continue;
+      String v = child.getValue() == null ? "" : child.getValue();
+      if ("file".equals(child.getType())
+          && v.startsWith(prefix)
+          && !"unchanged".equals(child.getRightStatus())) {
+        count++;
+      }
+      if (child.getChildren() != null && !child.getChildren().isEmpty()) {
+        count += countInnerChanges(child.getChildren(), jarPrefix);
+      }
+    }
+    return count;
   }
 
   private boolean isLikelyText(String path) {

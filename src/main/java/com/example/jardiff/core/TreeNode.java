@@ -10,6 +10,7 @@ public class TreeNode {
   private boolean leftExists;
   private boolean rightExists;
   private String rightStatus;
+  private int innerChanges = 0;
   private List<TreeNode> children = new ArrayList<>();
 
   public TreeNode() {
@@ -67,6 +68,14 @@ public class TreeNode {
 
   public void setRightStatus(String rightStatus) {
     this.rightStatus = rightStatus;
+  }
+
+  public int getInnerChanges() {
+    return innerChanges;
+  }
+
+  public void setInnerChanges(int innerChanges) {
+    this.innerChanges = innerChanges;
   }
 
   public List<TreeNode> getChildren() {

@@ -19,6 +19,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import org.hamcrest.Matchers;
 
@@ -63,6 +64,29 @@ public class CompareControllerIntegrationTest {
         .andExpect(content().string(containsString("+++ b/com/example/A.java")))
         .andExpect(content().string(containsString("@@")))
         .andExpect(content().string(containsString("+    log(")));
+  }
+
+  @Test
+  public void jarCompare_ignoresIndexedIgnoreGlobsFromMultipartForm() throws Exception {
+    byte[] leftJar = buildJarWithText("BOOT-INF/classes/ignored.txt", "left\n");
+    byte[] rightJar = buildJarWithText("BOOT-INF/classes/ignored.txt", "right\n");
+
+    MockMultipartFile left = new MockMultipartFile("leftJar", "left.jar", "application/java-archive", leftJar);
+    MockMultipartFile right = new MockMultipartFile("rightJar", "right.jar", "application/java-archive", rightJar);
+
+    String response = mockMvc.perform(multipart("/api/compare/jars")
+            .file(left).file(right)
+            .param("includeLib", "true")
+            .param("includeClasses", "true")
+            .param("includeResources", "true")
+            .param("ignoreGlobs[0]", "BOOT-INF/classes/ignored.txt"))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString();
+
+    JsonNode tree = objectMapper.readTree(response).get("tree");
+    if (containsPath(tree, "BOOT-INF/classes/ignored.txt")) {
+      throw new AssertionError("expected ignored path to be absent from compare tree");
+    }
   }
 
   @Test
@@ -167,5 +191,17 @@ public class CompareControllerIntegrationTest {
     byte[] out = Files.readAllBytes(tmp);
     Files.deleteIfExists(tmp);
     return out;
+  }
+
+  private boolean containsPath(JsonNode node, String path) {
+    if (node == null || node.isNull()) return false;
+    if (node.isArray()) {
+      for (JsonNode child : node) {
+        if (containsPath(child, path)) return true;
+      }
+      return false;
+    }
+    if (path.equals(node.path("value").asText())) return true;
+    return containsPath(node.get("children"), path);
   }
 }

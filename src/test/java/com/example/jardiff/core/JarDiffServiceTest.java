@@ -81,6 +81,36 @@ public class JarDiffServiceTest {
   }
 
   @Test
+  public void generateUnifiedDiff_includesCompleteFileContext() throws Exception {
+    String leftText = "line1\nline2\nline3\nline4\nline5\nline6\nold-line\nline8\nline9\nline10\nline11\nline12\n";
+    String rightText = "line1\nline2\nline3\nline4\nline5\nline6\nnew-line\nline8\nline9\nline10\nline11\nline12\n";
+
+    byte[] leftJar = buildJarWithText("sample.txt", leftText);
+    byte[] rightJar = buildJarWithText("sample.txt", rightText);
+
+    CompareStore store = new CompareStore();
+    DigestService digest = new DigestService();
+    AsmDecompileService asm = new AsmDecompileService();
+    ProcyonDecompileService procyon = new ProcyonDecompileService();
+    JarCompareService jarCompare = new JarCompareService(store, digest, asm, procyon);
+    JarDiffService jarDiff = new JarDiffService(store, asm, procyon, digest);
+
+    CompareOptions opts = new CompareOptions(true, true, true, false);
+    MockMultipartFile left = new MockMultipartFile("leftJar", "left.jar", "application/java-archive", leftJar);
+    MockMultipartFile right = new MockMultipartFile("rightJar", "right.jar", "application/java-archive", rightJar);
+    CompareResult result = jarCompare.compare(left, right, opts);
+
+    String unified = jarDiff.generateUnifiedDiff(result.getId(), "sample.txt");
+
+    assertNotNull(unified, "unified diff should not be null");
+    assertTrue(unified.contains(" line1"), "should include unchanged content before the diff context");
+    assertTrue(unified.contains(" line12"), "should include unchanged content after the diff context");
+
+    StoredCompare stored = store.get(result.getId()).orElse(null);
+    if (stored != null) stored.closeQuietly();
+  }
+
+  @Test
   public void generateUnifiedDiff_returnsNullForBinaryFile() throws Exception {
     byte[] leftJar = buildJarWithText("image.png", new byte[]{(byte)0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0});
     byte[] rightJar = buildJarWithText("image.png", new byte[]{(byte)0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3});

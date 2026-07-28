@@ -152,6 +152,35 @@ public class JarCompareServiceTest {
   }
 
   @Test
+  public void compare_deepCompareLib_setsInnerChangesOnJarNode() throws Exception {
+    byte[] leftInnerJar = buildJarWithSingleText("pkg/a.txt", "hello\n");
+    byte[] rightInnerJar = buildJarWithSingleText("pkg/a.txt", "world\n");
+
+    CompareStore store = new CompareStore();
+    DigestService digest = new DigestService();
+    AsmDecompileService asm = new AsmDecompileService();
+    ProcyonDecompileService procyon = new ProcyonDecompileService();
+    JarCompareService svc = new JarCompareService(store, digest, asm, procyon);
+    CompareOptions opts = new CompareOptions(true, true, true, true);
+
+    MockMultipartFile left = new MockMultipartFile("leftFiles", "lib/a.jar", "application/java-archive", leftInnerJar);
+    MockMultipartFile right = new MockMultipartFile("rightFiles", "lib/a.jar", "application/java-archive", rightInnerJar);
+
+    CompareResult result = svc.compareDirectoryFull(new MockMultipartFile[] { left }, new MockMultipartFile[] { right }, opts);
+
+    TreeNode jarNode = findByValue(result.getTree(), "lib/a.jar");
+    assertEquals("jar", jarNode == null ? "" : jarNode.getType());
+    assertEquals(1, jarNode == null ? 0 : jarNode.getInnerChanges());
+    TreeNode innerDir = jarNode == null ? null : findByValue(jarNode.getChildren(), "lib/a.jar!/pkg");
+    assertEquals("dir", innerDir == null ? "" : innerDir.getType());
+    TreeNode innerFile = findByValue(result.getTree(), "lib/a.jar!/pkg/a.txt");
+    assertEquals("modified", innerFile == null ? "" : innerFile.getRightStatus());
+
+    StoredCompare stored = store.get(result.getId()).orElse(null);
+    if (stored != null) stored.closeQuietly();
+  }
+
+  @Test
   public void diff_returnsTextForJavaSource() throws Exception {
     byte[] leftJar = buildJarWithSingleText("BOOT-INF/classes/A.java", "class A {\n  int x = 1;\n}\n");
     byte[] rightJar = buildJarWithSingleText("BOOT-INF/classes/A.java", "class A {\n  int x = 2;\n}\n");

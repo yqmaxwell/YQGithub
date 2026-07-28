@@ -111,6 +111,13 @@ public class CompareController {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.TEXT_PLAIN).body(msg.isEmpty() ? "bad request" : msg);
   }
 
+  @ExceptionHandler(CompareStore.CapacityExceededException.class)
+  public ResponseEntity<String> handleCompareCapacityExceeded(CompareStore.CapacityExceededException ex) {
+    String msg = ex == null || ex.getMessage() == null ? "compare resource limit exceeded" : ex.getMessage();
+    log.warn("compare rejected by resource limit: {}", msg);
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).contentType(MediaType.TEXT_PLAIN).body(msg);
+  }
+
   @PostMapping(value = "/compare/jars", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public CompareResult compareJars(
       @RequestParam("leftJar") MultipartFile leftJar,
@@ -120,9 +127,24 @@ public class CompareController {
       @RequestParam(value = "includeResources", defaultValue = "true") boolean includeResources,
       @RequestParam(value = "deepCompareLib", defaultValue = "false") boolean deepCompareLib,
       @RequestParam(value = "ignoreGlobs", required = false) String ignoreGlobs,
-      @RequestParam(value = "limitJarMb", required = false) Integer limitJarMb) {
+      @RequestParam(value = "limitJarMb", required = false) Integer limitJarMb,
+      HttpServletRequest request) {
     Objects.requireNonNull(leftJar, "leftJar");
     Objects.requireNonNull(rightJar, "rightJar");
+    String effectiveIgnoreGlobs = ignoreGlobs;
+    if (effectiveIgnoreGlobs == null || effectiveIgnoreGlobs.trim().isEmpty()) {
+      StringBuilder indexedIgnoreGlobs = new StringBuilder();
+      for (Map.Entry<String, String[]> entry : request.getParameterMap().entrySet()) {
+        if (!entry.getKey().startsWith("ignoreGlobs[")) continue;
+        String[] values = entry.getValue();
+        for (String value : values) {
+          if (value == null || value.trim().isEmpty()) continue;
+          if (indexedIgnoreGlobs.length() > 0) indexedIgnoreGlobs.append('\n');
+          indexedIgnoreGlobs.append(value);
+        }
+      }
+      if (indexedIgnoreGlobs.length() > 0) effectiveIgnoreGlobs = indexedIgnoreGlobs.toString();
+    }
     log.info(
         "compareJars start leftName={} leftSize={} rightName={} rightSize={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={} limitJarMb={}",
         leftJar.getOriginalFilename(),
@@ -133,11 +155,11 @@ public class CompareController {
         includeClasses,
         includeResources,
         deepCompareLib,
-        ignoreGlobs,
+        effectiveIgnoreGlobs,
         limitJarMb);
     validateJarSize(leftJar, "左侧 jar", limitJarMb);
     validateJarSize(rightJar, "右侧 jar", limitJarMb);
-    CompareOptions options = new CompareOptions(includeLib, includeClasses, includeResources, deepCompareLib, splitIgnore(ignoreGlobs));
+    CompareOptions options = new CompareOptions(includeLib, includeClasses, includeResources, deepCompareLib, splitIgnore(effectiveIgnoreGlobs));
     CompareResult result = jarCompareService.compare(leftJar, rightJar, options);
     Stats stats = result == null ? null : result.getStats();
     log.info(

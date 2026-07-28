@@ -115,7 +115,7 @@ public class JarDiffService {
     List<String> rightLines = result.getRight() != null ? result.getRight() : Collections.emptyList();
     Patch<String> patch = DiffUtils.diff(leftLines, rightLines);
     List<String> unified = UnifiedDiffUtils.generateUnifiedDiff(
-        "a/" + path, "b/" + path, leftLines, patch, 3);
+        "a/" + path, "b/" + path, leftLines, patch, Math.max(leftLines.size(), rightLines.size()));
     return unified.isEmpty() ? null : String.join("\n", unified);
   }
 
@@ -128,7 +128,8 @@ public class JarDiffService {
     List<String> leftLines = Arrays.asList(leftText.split("\n", -1));
     List<String> rightLines = Arrays.asList(rightText.split("\n", -1));
     Patch<String> patch = DiffUtils.diff(leftLines, rightLines);
-    List<String> unified = UnifiedDiffUtils.generateUnifiedDiff("a/file", "b/file", leftLines, patch, 3);
+    List<String> unified = UnifiedDiffUtils.generateUnifiedDiff(
+        "a/file", "b/file", leftLines, patch, Math.max(leftLines.size(), rightLines.size()));
     return unified.isEmpty() ? null : String.join("\n", unified);
   }
   // [AGC:END]

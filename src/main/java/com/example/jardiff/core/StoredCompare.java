@@ -108,6 +108,28 @@ public class StoredCompare {
     return extractedCache.size();
   }
 
+  // [AGC:START] tool=Cc author=maxwell date=2026-07-27
+  public long getResourceBytes() {
+    long total = resourceBytes(leftJarPath) + resourceBytes(rightJarPath);
+    for (Path path : extractedCache.values()) {
+      total += resourceBytes(path);
+    }
+    return total;
+  }
+
+  private long resourceBytes(Path path) {
+    if (path == null) return 0L;
+    try {
+      if (!Files.exists(path)) {
+        throw new IllegalStateException("compare resource missing: " + path);
+      }
+      return Files.size(path);
+    } catch (IOException e) {
+      throw new IllegalStateException("compare resource size unavailable: " + path, e);
+    }
+  }
+  // [AGC:END]
+
   public Path removeAnyExtracted() {
     for (Map.Entry<String, Path> e : extractedCache.entrySet()) {
       if (e == null) continue;

@@ -1,0 +1,333 @@
+{
+  "schemaVersion": 5,
+  "stateRevision": 43,
+  "changeId": "fix-ui-theme-and-tree-interaction",
+  "businessTopic": "UI 主题、结构比对交互与依赖 Jar 深度比对修复",
+  "state": "VERIFIED",
+  "gate": {
+    "status": "OPEN",
+    "returnTo": "none",
+    "reason": "",
+    "taskId": ""
+  },
+  "exploration": {
+    "mode": "reopen",
+    "finalConfirmation": "用户已确认以 GitHub PR Diff 与 VS Code 工作台为主体，吸收 Swiss Grid 的网格与对齐细节，Neubrutalism 不进入结果工作区，Awwwards 表达仅用于上传首屏、空状态和短过渡，并要求写入现有 Tydic 设计文档。",
+    "reopenReason": "现有 design.md 尚未记录用户已确认的 GitHub/VS Code 主体、Swiss Grid 细节与 Awwwards 适用边界",
+    "reopenedAt": "2026-07-27T14:58:39+08:00"
+  },
+  "tasks": {
+    "order": [
+      "T001",
+      "T002"
+    ],
+    "items": {
+      "T001": {
+        "status": "DONE",
+        "prerequisites": [],
+        "behavior": "完成后端 Jar 深度索引数据：TreeNode 返回 innerChanges，JarCompareService 统计内部非 unchanged 文件数量，并通过服务测试验证。",
+        "acceptance": [
+          {
+            "criterion": "TreeNode JSON 序列化包含 innerChanges 字段默认值 0",
+            "verificationIndexes": [
+              1
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-001.md"
+            ]
+          },
+          {
+            "criterion": "深度索引的 jar 节点 innerChanges 等于内部非 unchanged 文件数",
+            "verificationIndexes": [
+              1
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-001.md"
+            ]
+          },
+          {
+            "criterion": "mvn test 全部测试通过",
+            "verificationIndexes": [
+              1
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-001.md"
+            ]
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [
+            "src/main/java/com/example/jardiff/core/TreeNode.java",
+            "src/main/java/com/example/jardiff/core/JarCompareService.java",
+            "src/test/java/com/example/jardiff/core/JarCompareServiceTest.java"
+          ],
+          "forbidden": [],
+          "new": [],
+          "readOnly": []
+        },
+        "verificationCommands": [
+          "mvn -Dlogging.file.path=/tmp/jar-diff-tool-test-logs test"
+        ],
+        "evidence": [
+          {
+            "type": "machine",
+            "path": "evidence/code/T001-001.md",
+            "sha256": "caf2aa8a204cfdd9e4eb7a5d85d19d3b11c135843c7f5e5cf1d6a05853224caf",
+            "jsonl": "evidence/code/T001-001.md.jsonl",
+            "command": "mvn -Dlogging.file.path=/tmp/jar-diff-tool-test-logs test",
+            "exitCode": 0,
+            "taskId": "T001",
+            "changeId": "fix-ui-theme-and-tree-interaction",
+            "statePath": "state.json",
+            "stateRevision": 35,
+            "diffHash": "920857f66299b70f71a0917683214682a32b0a59558689e822e3bd124f8585ed",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-27T15:17:58+08:00"
+          }
+        ],
+        "modifiedFiles": [
+          "src/test/java/com/example/jardiff/core/JarCompareServiceTest.java"
+        ],
+        "claimedAt": "2026-07-27T15:16:59+08:00",
+        "evidenceStateRevision": 35,
+        "completedAt": "2026-07-27T15:17:58+08:00"
+      },
+      "T002": {
+        "status": "DONE",
+        "prerequisites": [
+          "T001"
+        ],
+        "behavior": "完成前端 GitHub 浅色工作台与 VS Code 式导航交互：两阶段上传、变更树与左右结构切换、左右对齐同步、Jar 展开恢复、hunk 导航、请求竞态保护和全宽返回。",
+        "acceptance": [
+          {
+            "criterion": "比对前后两阶段布局切换正确，结果态上传区收起为紧凑工具栏",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          },
+          {
+            "criterion": "页面渲染为 GitHub 浅色白底主题，并将 Swiss Grid 细节限制在对齐和排版层",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          },
+          {
+            "criterion": "变更树与左右结构切换不影响当前文件和右侧 Diff，结构模式导航区扩展至约 55%",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          },
+          {
+            "criterion": "左右结构按 leftExists/rightExists 显示真实节点或等高占位，展开、行高和滚动同步",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          },
+          {
+            "criterion": "文件和目录状态同时使用颜色与 M/A/D/T 标记，目录展示聚合变更数",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          },
+          {
+            "criterion": "包含依赖 Jar 设置正确恢复，请求携带 deepCompareLib=true，Jar 展开失败显示原因并支持重试",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          },
+          {
+            "criterion": "结构模式点击文件只更新右侧 Diff，全宽模式选择文件后关闭浮层回到常规布局",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          },
+          {
+            "criterion": "Diff 按 hunk 导航并显示当前位置，快速连续选择文件时仅最后一次请求更新界面",
+            "verificationIndexes": [
+              1,
+              2,
+              3
+            ],
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T002-001.md",
+              "evidence/code/T002-002.md",
+              "evidence/code/T002-003.md"
+            ]
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [
+            "src/main/resources/static/index.html",
+            "src/main/resources/static/app/app.js"
+          ],
+          "forbidden": [],
+          "new": [],
+          "readOnly": []
+        },
+        "verificationCommands": [
+          "mvn compile",
+          "node --check src/main/resources/static/app/app.js",
+          "git diff --check"
+        ],
+        "evidence": [
+          {
+            "type": "machine",
+            "path": "evidence/code/T002-001.md",
+            "sha256": "39a9404ac4500c2f992dc9f5307f0d60725614c6f52beb690547738ec11e2025",
+            "jsonl": "evidence/code/T002-001.md.jsonl",
+            "command": "mvn compile",
+            "exitCode": 0,
+            "taskId": "T002",
+            "changeId": "fix-ui-theme-and-tree-interaction",
+            "statePath": "state.json",
+            "stateRevision": 41,
+            "diffHash": "db09bffa6bf81a43c83dac2b4b3ebbeac89a743dd66af681d6a4e376cc8102c7",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-27T16:36:44+08:00"
+          },
+          {
+            "type": "machine",
+            "path": "evidence/code/T002-002.md",
+            "sha256": "d96a0eea2d3f011c4e85de83602ae783497bfaeeeb40615899c75aeb30da3114",
+            "jsonl": "evidence/code/T002-002.md.jsonl",
+            "command": "node --check src/main/resources/static/app/app.js",
+            "exitCode": 0,
+            "taskId": "T002",
+            "changeId": "fix-ui-theme-and-tree-interaction",
+            "statePath": "state.json",
+            "stateRevision": 41,
+            "diffHash": "db09bffa6bf81a43c83dac2b4b3ebbeac89a743dd66af681d6a4e376cc8102c7",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-27T16:36:44+08:00"
+          },
+          {
+            "type": "machine",
+            "path": "evidence/code/T002-003.md",
+            "sha256": "45daf523cc03831cc3eb1a9eb5a064e71049a0a261c28a24552d35a74fd0e273",
+            "jsonl": "evidence/code/T002-003.md.jsonl",
+            "command": "git diff --check",
+            "exitCode": 0,
+            "taskId": "T002",
+            "changeId": "fix-ui-theme-and-tree-interaction",
+            "statePath": "state.json",
+            "stateRevision": 41,
+            "diffHash": "db09bffa6bf81a43c83dac2b4b3ebbeac89a743dd66af681d6a4e376cc8102c7",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-27T16:36:44+08:00"
+          }
+        ],
+        "modifiedFiles": [
+          "src/main/resources/static/app/app.js"
+        ],
+        "claimedAt": "2026-07-27T16:31:57+08:00",
+        "evidenceStateRevision": 41,
+        "completedAt": "2026-07-27T16:36:44+08:00"
+      }
+    }
+  },
+  "artifacts": {
+    "spec": {
+      "path": "spec.md",
+      "sha256": "7048306faa4732d2a75b9ac03d4557ef7894fc849e05647c9d3f5a4c1eaa0eca",
+      "status": "PASS",
+      "revision": 3
+    },
+    "design": {
+      "path": "design.md",
+      "sha256": "6306ef5a2540f7c34bf607e76f42eb4530414be9bdb17dbf9e884625c75fcc8d",
+      "status": "PASS",
+      "revision": 3,
+      "specPath": "spec.md",
+      "specSha256": "7048306faa4732d2a75b9ac03d4557ef7894fc849e05647c9d3f5a4c1eaa0eca",
+      "specRevision": 3
+    },
+    "tickets": {
+      "path": "tickets.md",
+      "sha256": "222e83778f700db93529e81c26db4c8a54741f6dc6f129a95f975d1aaba34579",
+      "status": "PASS"
+    },
+    "reviewEvidence": {
+      "path": "evidence/review/final.md",
+      "sha256": "172dc28a01eaae01aac20f6b0055bfa3fdb55c1bbd7962b05e2e7f12f2bb0fde",
+      "status": "PASS"
+    }
+  },
+  "evidence": [
+    {
+      "path": "evidence/findings/ui-redesign.md",
+      "sha256": "fc04e188ee2130e35c81295f7a1396670b9692b7dd91429d5992647c96dd23f3",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "evidence/findings/visual-design-direction.md",
+      "sha256": "663d465307438ae8515b09a43148556d1cef3d9346cc3e76152291d16266f3f5",
+      "status": "BLOCKED"
+    }
+  ]
+}
