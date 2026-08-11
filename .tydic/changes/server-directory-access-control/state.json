@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 5,
+  "stateRevision": 15,
+  "changeId": "server-directory-access-control",
+  "businessTopic": "按部署模式控制目录比对",
+  "state": "CODING",
+  "gate": {
+    "status": "OPEN",
+    "returnTo": "none",
+    "reason": "",
+    "taskId": ""
+  },
+  "exploration": {
+    "mode": "reopen",
+    "finalConfirmation": "用户确认修订后的完整规格、设计和验收标准",
+    "reopenReason": "当前 spec.md 和 design.md 未定义服务器模式下首页固定“本地版本比对”文案的处理方式; 用户已确认本地和服务器模式统一显示中性文案“版本比对”，能力接口仍只返回 directoryCompareEnabled",
+    "reopenedAt": "2026-07-29T15:43:44+08:00",
+    "confirmations": [
+      {
+        "text": "用户确认当前 spec.md 和 design.md 的完整需求、方案及验收标准",
+        "specRevision": 1,
+        "specSha256": "1fb5d75356744342f3473506621842c566e150c9f5672832d33e9e1650b96f05",
+        "confirmedAt": "2026-07-29T15:41:06+08:00"
+      },
+      {
+        "text": "用户确认修订后的完整规格、设计和验收标准",
+        "specRevision": 2,
+        "specSha256": "4baf02d4675043bb1e26e6f55155aa3cea36fe73472e8daf50133e1afc273a86",
+        "confirmedAt": "2026-07-29T15:47:51+08:00"
+      }
+    ]
+  },
+  "tasks": {
+    "order": [
+      "T001",
+      "T002"
+    ],
+    "items": {
+      "T001": {
+        "status": "PENDING",
+        "prerequisites": [],
+        "behavior": "系统按显式部署模式公开目录能力，并在服务器模式于业务执行前拒绝全部目录接口",
+        "acceptance": [
+          {
+            "criterion": "默认 local 模式的能力接口返回 directoryCompareEnabled=true",
+            "verificationIndexes": [
+              1
+            ],
+            "verificationType": "behavior",
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "server 模式的能力接口返回 false，三个目录接口均返回 HTTP 403 且正文说明服务器模式禁止目录比对",
+            "verificationIndexes": [
+              1
+            ],
+            "verificationType": "behavior",
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "非法 jardiff.deployment-mode 使应用上下文启动失败且错误指向该配置项",
+            "verificationIndexes": [
+              1
+            ],
+            "verificationType": "behavior",
+            "result": "PENDING",
+            "evidencePaths": []
+          },
+          {
+            "criterion": "既有 Jar、文件和文本后端主流程测试继续通过",
+            "verificationIndexes": [
+              1
+            ],
+            "verificationType": "behavior",
+            "result": "PENDING",
+            "evidencePaths": []
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [
+            "src/main/resources/application.properties",
+            "src/main/java/com/example/jardiff/api/CompareController.java",
+            "src/test/java/com/example/jardiff/api/CompareControllerIntegrationTest.java"
+          ],
+          "forbidden": [
+            "src/main/resources/static/app/api.js",
+            "src/main/resources/static/app/app.js"
+          ],
+          "new": [
+            "src/test/java/com/example/jardiff/api/ServerDirectoryAccessIntegrationTest.java",
+            "src/test/java/com/example/jardiff/api/InvalidDeploymentModeIntegrationTest.java"
+          ],
+          "readOnly": [
+            "pom.xml",
+            "src/main/java/com/example/jardiff/JarDiffApplication.java"
+          ]
+        },
+        "verificationCommands": [
+          "mvn -Dlogging.file.path=/tmp/jardiff-test-logs -Dtest=CompareControllerIntegrationTest,ServerDirectoryAccessIntegrationTest,InvalidDeploymentModeIntegrationTest test"
+        ],
+        "evidence": [],
+        "modifiedFiles": []
+      },
+      "T002": {
+        "status": "DONE",
+        "prerequisites": [
+          "T001"
+        ],
+        "behavior": "页面按后端目录能力展示可用比对类型，并在目录不可用时回退 Jar 且统一显示版本比对文案",
+        "acceptance": [
+          {
+            "criterion": "local 模式页面显示目录入口并可完成现有目录比对流程，首页显示版本比对",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "项目没有前端测试框架；以默认 local 配置启动页面，确认目录入口可见、选择两个有效目录完成比对，并检查首页状态文案为版本比对"
+          },
+          {
+            "criterion": "server 模式页面隐藏目录入口，Jar、文件和文本入口保持可见，首页显示版本比对",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "项目没有前端测试框架；以 jardiff.deployment-mode=server 启动页面，确认目录入口不存在、其余三类入口存在且首页状态文案为版本比对"
+          },
+          {
+            "criterion": "server 模式读取到已持久化的 dir 时自动切换并持久化为 jar",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "依赖浏览器 localStorage 运行态；在 server 模式预置 mode=dir 后刷新，确认当前类型和存储值均变为 jar"
+          },
+          {
+            "criterion": "能力接口请求失败时目录入口保持隐藏且页面不进入不可操作的目录模式",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "依赖浏览器网络失败运行态；阻断 capabilities 请求后刷新页面，确认目录入口隐藏，预置 dir 时仍回退到 Jar"
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [
+            "src/main/resources/static/app/api.js",
+            "src/main/resources/static/app/app.js"
+          ],
+          "forbidden": [
+            "src/test/java/com/example/jardiff/api/CompareControllerIntegrationTest.java",
+            "src/test/java/com/example/jardiff/api/ServerDirectoryAccessIntegrationTest.java",
+            "src/test/java/com/example/jardiff/api/InvalidDeploymentModeIntegrationTest.java"
+          ],
+          "new": [],
+          "readOnly": [
+            "src/main/resources/static/app/storage.js",
+            "src/main/resources/static/index.html",
+            "src/main/resources/application.properties",
+            "src/main/java/com/example/jardiff/api/CompareController.java"
+          ]
+        },
+        "verificationCommands": [
+          "node --check src/main/resources/static/app/api.js && node --check src/main/resources/static/app/app.js"
+        ],
+        "evidence": [
+          {
+            "type": "machine",
+            "path": "evidence/code/T002-001.md",
+            "sha256": "4f37a89db49efbf2134e01c9402b6832a3ad178f85e9a6f616d5cebe04347410",
+            "jsonl": "evidence/code/T002-001.md.jsonl",
+            "command": "node --check src/main/resources/static/app/api.js && node --check src/main/resources/static/app/app.js",
+            "exitCode": 0,
+            "taskId": "T002",
+            "changeId": "server-directory-access-control",
+            "statePath": "state.json",
+            "stateRevision": 12,
+            "diffHash": "df858676132151182b4b4bc3dd3a6bf6614723a1c3c17ea79df6662c01cf3ff2",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-29T16:40:52+08:00"
+          }
+        ],
+        "modifiedFiles": [
+          "src/main/resources/static/app/api.js",
+          "src/main/resources/static/app/app.js"
+        ],
+        "claimedAt": "2026-07-29T16:29:10+08:00",
+        "evidenceStateRevision": 12,
+        "completedAt": "2026-07-29T16:40:52+08:00"
+      }
+    }
+  },
+  "artifacts": {
+    "spec": {
+      "path": "spec.md",
+      "sha256": "4baf02d4675043bb1e26e6f55155aa3cea36fe73472e8daf50133e1afc273a86",
+      "status": "PASS",
+      "revision": 2
+    },
+    "design": {
+      "path": "design.md",
+      "sha256": "030eb0d54b68a65a90ccf758d8517e314bdf0b2f2985f9acdc12460e214726f4",
+      "status": "PASS",
+      "revision": 2,
+      "specPath": "spec.md",
+      "specSha256": "4baf02d4675043bb1e26e6f55155aa3cea36fe73472e8daf50133e1afc273a86",
+      "specRevision": 2
+    },
+    "tickets": {
+      "path": "tickets.md",
+      "sha256": "bc1270daa4c9ee6fb54c6af399f3b10a1c5210461983401e799c648778a74d5c",
+      "status": "PASS"
+    },
+    "reviewEvidence": {
+      "path": "evidence/review/final.md",
+      "sha256": "74deb848eade01d4585c7ad406fbea4ed4286d16079dcca6145dfedde0e01235",
+      "status": "BLOCKED"
+    }
+  },
+  "evidence": [
+    {
+      "path": "evidence/findings/server-header-label.md",
+      "sha256": "33e310234273ee649ee868dd65558584d27d6db61ec1b26091020d6406f1d6dd",
+      "status": "BLOCKED"
+    }
+  ]
+}

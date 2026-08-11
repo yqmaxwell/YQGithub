@@ -74,49 +74,92 @@ public class JarCompareService {
     Path leftPath = null;
     Path rightPath = null;
     try {
-      log.info(
-          "compare start leftName={} leftSize={} rightName={} rightSize={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={}",
-          safeName(leftJar),
-          leftJar.getSize(),
-          safeName(rightJar),
-          rightJar.getSize(),
-          options.isIncludeLib(),
-          options.isIncludeClasses(),
-          options.isIncludeResources(),
-          options.isDeepCompareLib(),
-          options.getIgnoreGlobs());
       leftPath = saveTemp(leftJar);
       rightPath = saveTemp(rightJar);
-
-      FileMeta leftMeta = new FileMeta(safeName(leftJar), leftJar.getSize(), digestService.md5(leftPath));
-      FileMeta rightMeta = new FileMeta(safeName(rightJar), rightJar.getSize(), digestService.md5(rightPath));
-
-      StoredCompare stored = new StoredCompare(leftPath, rightPath, options, Instant.now());
-      String id = compareStore.put(stored);
-
-      CompareIndex leftIndex = buildIndex(leftPath, options);
-      CompareIndex rightIndex = buildIndex(rightPath, options);
-
-      CompareResultWithStats built = buildAlignedTree(leftIndex, rightIndex, options);
-      CompareResult result = new CompareResult(id, leftMeta, rightMeta, built.tree, built.stats);
-      stored.setLeftMeta(leftMeta);
-      stored.setRightMeta(rightMeta);
-      stored.setTree(built.tree);
-      stored.setStats(built.stats);
-      log.info(
-          "compare done id={} added={} missing={} modified={} unchanged={}",
-          id,
-          built.stats == null ? 0 : built.stats.getAdded(),
-          built.stats == null ? 0 : built.stats.getMissing(),
-          built.stats == null ? 0 : built.stats.getModified(),
-          built.stats == null ? 0 : built.stats.getUnchanged());
-      return result;
+      return compareByJarPath(
+          leftPath,
+          rightPath,
+          safeName(leftJar),
+          safeName(rightJar),
+          leftJar.getSize(),
+          rightJar.getSize(),
+          options);
     } catch (IOException e) {
       if (leftPath != null) safeDelete(leftPath);
       if (rightPath != null) safeDelete(rightPath);
       log.error("compare failed leftName={} rightName={}", safeName(leftJar), safeName(rightJar), e);
       throw new RuntimeException("compare failed: " + e.getMessage(), e);
     }
+  }
+
+  /**
+   * 按本地 jar 文件路径比对（不走 MultipartFile 上传，不落临时文件、不删除用户文件）。
+   * 供桌面工具的 FileChooser 选定本地 jar 后直接比对使用。
+   */
+  public CompareResult compareJarsByPath(Path leftJar, Path rightJar, CompareOptions options) {
+    Objects.requireNonNull(leftJar, "leftJar");
+    Objects.requireNonNull(rightJar, "rightJar");
+    Objects.requireNonNull(options, "options");
+    try {
+      String leftName = leftJar.getFileName() != null ? leftJar.getFileName().toString() : leftJar.toString();
+      String rightName = rightJar.getFileName() != null ? rightJar.getFileName().toString() : rightJar.toString();
+      long leftSize = Files.size(leftJar);
+      long rightSize = Files.size(rightJar);
+      return compareByJarPath(leftJar, rightJar, leftName, rightName, leftSize, rightSize, options);
+    } catch (IOException e) {
+      log.error("compareJarsByPath failed leftJar={} rightJar={}", leftJar, rightJar, e);
+      throw new RuntimeException("compare failed: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * 两个已就绪的 jar 文件路径（zip 结构）的公共比对逻辑：建元数据、入会话、建索引、对齐树。
+   * 由 {@link #compare}（上传版，前置 saveTemp）和 {@link #compareJarsByPath}（本地路径版）共用。
+   */
+  private CompareResult compareByJarPath(
+      Path leftPath,
+      Path rightPath,
+      String leftName,
+      String rightName,
+      long leftSize,
+      long rightSize,
+      CompareOptions options)
+      throws IOException {
+    log.info(
+        "compare start leftName={} leftSize={} rightName={} rightSize={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={}",
+        leftName,
+        leftSize,
+        rightName,
+        rightSize,
+        options.isIncludeLib(),
+        options.isIncludeClasses(),
+        options.isIncludeResources(),
+        options.isDeepCompareLib(),
+        options.getIgnoreGlobs());
+
+    FileMeta leftMeta = new FileMeta(leftName, leftSize, digestService.md5(leftPath));
+    FileMeta rightMeta = new FileMeta(rightName, rightSize, digestService.md5(rightPath));
+
+    StoredCompare stored = new StoredCompare(leftPath, rightPath, options, Instant.now());
+    String id = compareStore.put(stored);
+
+    CompareIndex leftIndex = buildIndex(leftPath, options);
+    CompareIndex rightIndex = buildIndex(rightPath, options);
+
+    CompareResultWithStats built = buildAlignedTree(leftIndex, rightIndex, options);
+    CompareResult result = new CompareResult(id, leftMeta, rightMeta, built.tree, built.stats);
+    stored.setLeftMeta(leftMeta);
+    stored.setRightMeta(rightMeta);
+    stored.setTree(built.tree);
+    stored.setStats(built.stats);
+    log.info(
+        "compare done id={} added={} missing={} modified={} unchanged={}",
+        id,
+        built.stats == null ? 0 : built.stats.getAdded(),
+        built.stats == null ? 0 : built.stats.getMissing(),
+        built.stats == null ? 0 : built.stats.getModified(),
+        built.stats == null ? 0 : built.stats.getUnchanged());
+    return result;
   }
 
   public CompareResult getCachedResult(String id) {
@@ -271,8 +314,8 @@ public class JarCompareService {
           options.isIncludeResources(),
           options.isDeepCompareLib(),
           options.getIgnoreGlobs());
-      leftZip = buildZipFromDirectory(leftDir, maxFiles, maxBytes);
-      rightZip = buildZipFromDirectory(rightDir, maxFiles, maxBytes);
+      leftZip = buildZipFromDirectory(leftDir, maxFiles, maxBytes, options);
+      rightZip = buildZipFromDirectory(rightDir, maxFiles, maxBytes, options);
 
       FileMeta leftMeta = new FileMeta(String.valueOf(leftDir), leftZip.size, leftZip.md5);
       FileMeta rightMeta = new FileMeta(String.valueOf(rightDir), rightZip.size, rightZip.md5);
@@ -366,7 +409,7 @@ public class JarCompareService {
     return new ZipBuildResult(tmp, size, md5Hex);
   }
 
-  private ZipBuildResult buildZipFromDirectory(Path dir, int maxFiles, long maxBytes) throws IOException {
+  private ZipBuildResult buildZipFromDirectory(Path dir, int maxFiles, long maxBytes, CompareOptions options) throws IOException {
     if (dir == null) throw new IllegalArgumentException("目录路径为空");
     if (!Files.exists(dir)) throw new IllegalArgumentException("目录不存在：" + dir);
     if (!Files.isDirectory(dir)) throw new IllegalArgumentException("不是目录：" + dir);
@@ -383,6 +426,7 @@ public class JarCompareService {
     DigestOutputStream dos = md == null ? null : new DigestOutputStream(baseOs, md);
     long[] totalBytes = new long[] {0L};
     int[] totalFiles = new int[] {0};
+    int[] ignoredFiles = new int[] {0};
     try (OutputStream os = dos == null ? baseOs : dos;
         ZipOutputStream zos = new ZipOutputStream(os, StandardCharsets.UTF_8)) {
       zos.setLevel(0);
@@ -398,6 +442,11 @@ public class JarCompareService {
               Path rel = dir.relativize(file);
               String entryName = sanitizeEntryName(String.valueOf(rel).replace("\\", "/"));
               if (entryName.isEmpty()) return FileVisitResult.CONTINUE;
+              // 忽略规则在打包阶段生效：被忽略的文件不写入 zip，也不计入体积/文件数上限
+              if (isIgnored(entryName, options)) {
+                ignoredFiles[0] += 1;
+                return FileVisitResult.CONTINUE;
+              }
               if (!added.add(entryName)) return FileVisitResult.CONTINUE;
               long s = attrs.size();
               if (s > 0) totalBytes[0] += s;
@@ -430,9 +479,10 @@ public class JarCompareService {
     long size = Files.size(tmp);
     String md5Hex = md == null ? digestService.md5(tmp) : toHex(md.digest());
     log.info(
-        "build zip from directory done dir={} files={} totalBytes={} zipSize={} md5={}",
+        "build zip from directory done dir={} files={} ignoredByGlobs={} totalBytes={} zipSize={} md5={}",
         dir,
         totalFiles[0],
+        ignoredFiles[0],
         totalBytes[0],
         size,
         md5Hex);

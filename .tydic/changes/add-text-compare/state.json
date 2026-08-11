@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 5,
+  "stateRevision": 14,
+  "changeId": "add-text-compare",
+  "businessTopic": "粘贴文本比对",
+  "state": "VERIFIED",
+  "gate": {
+    "status": "OPEN",
+    "returnTo": "none",
+    "reason": "",
+    "taskId": ""
+  },
+  "exploration": {
+    "mode": "new",
+    "finalConfirmation": "用户确认文本作为第四种比对类型，复用现有文件比对接口和结果页，使用固定名称，并确认页面交互、数据流、异常处理与验收标准，可以进入实现阶段",
+    "confirmations": [
+      {
+        "text": "用户确认文本作为第四种比对类型，复用现有文件比对接口和结果页，使用固定名称，并确认页面交互、数据流、异常处理与验收标准，可以进入实现阶段",
+        "specRevision": 1,
+        "specSha256": "cd244aefc89c0653a1a4f17f877b2d67c807407da4f3760ee359e9636550e483",
+        "confirmedAt": "2026-07-28T20:11:34+08:00"
+      }
+    ]
+  },
+  "tasks": {
+    "order": [
+      "T001"
+    ],
+    "items": {
+      "T001": {
+        "status": "DONE",
+        "prerequisites": [],
+        "behavior": "完成粘贴文本比对闭环：新增文本模式和左右粘贴区，复用文件直比接口进入现有结果页，并保留既有 Diff 操作与返回行为。",
+        "acceptance": [
+          {
+            "criterion": "文本模式入口、左右粘贴区、无关配置隐藏和两侧全空禁用行为符合已确认设计",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "依赖真实 Vue 页面和 DOM 状态；启动项目后切换文本模式，核对入口选中态、左右文本框、配置隐藏，并确认两侧全空时按钮禁用且不发请求。"
+          },
+          {
+            "criterion": "双侧差异、单侧为空、完全一致、中文及多行文本均通过现有结果页得到正确完整差异",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "依赖真实页面与 diff2html 渲染；在浏览器依次提交双侧差异、左空、右空、完全一致、中文和多行文本，核对完整文件内容及新增删除状态。"
+          },
+          {
+            "criterion": "文本结果页的并排统一切换、字号、变更导航、专注模式和失败重试继续可用",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "依赖真实结果页交互；在浏览器逐项操作视图切换、字号、上一处下一处、专注模式，并通过失败场景核对重试入口和输入保留。"
+          },
+          {
+            "criterion": "返回首页后粘贴文本保留且浏览器刷新后清空",
+            "verificationIndexes": [],
+            "verificationType": "manual",
+            "result": "UNVERIFIED",
+            "evidencePaths": [],
+            "manualReason": "依赖浏览器页面生命周期；完成文本比对后点击新建比对核对原文仍在，再刷新页面确认文本清空。"
+          },
+          {
+            "criterion": "现有 Jar、目录和文件比对后端测试继续通过",
+            "verificationIndexes": [
+              2
+            ],
+            "verificationType": "behavior",
+            "result": "PASS",
+            "evidencePaths": [
+              "evidence/code/T001-002.md"
+            ]
+          }
+        ],
+        "allowedFiles": {
+          "delete": [],
+          "edit": [
+            "src/main/resources/static/app/app.js",
+            "src/main/resources/static/index.html"
+          ],
+          "forbidden": [],
+          "new": [],
+          "readOnly": [
+            "src/main/resources/static/app/api.js",
+            "src/main/resources/static/app/core.js",
+            "src/main/resources/static/app/storage.js",
+            "src/main/java/com/example/jardiff/api/CompareController.java",
+            "src/test/java/com/example/jardiff/api/CompareControllerIntegrationTest.java",
+            "pom.xml"
+          ]
+        },
+        "verificationCommands": [
+          "node --check src/main/resources/static/app/app.js",
+          "mvn -Dlogging.file.path=/tmp/jar-diff-tool-test-logs test",
+          "git diff --check"
+        ],
+        "evidence": [
+          {
+            "type": "machine",
+            "path": "evidence/code/T001-001.md",
+            "sha256": "4c60869cfeee03793cb36fd5c691cad95682a5f8dc15f945bd78ab4839b12c9c",
+            "jsonl": "evidence/code/T001-001.md.jsonl",
+            "command": "node --check src/main/resources/static/app/app.js",
+            "exitCode": 0,
+            "taskId": "T001",
+            "changeId": "add-text-compare",
+            "statePath": "state.json",
+            "stateRevision": 12,
+            "diffHash": "2d80dc31924ce95ffd1bb551bf720f1e76ad98605ed4ab190f7a093915764f4c",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-29T09:25:39+08:00"
+          },
+          {
+            "type": "machine",
+            "path": "evidence/code/T001-002.md",
+            "sha256": "2ea98f4fdcff3e71f300a424f9c13a5442591cb945fe4138c6ea1a56192b3b08",
+            "jsonl": "evidence/code/T001-002.md.jsonl",
+            "command": "mvn -Dlogging.file.path=/tmp/jar-diff-tool-test-logs test",
+            "exitCode": 0,
+            "taskId": "T001",
+            "changeId": "add-text-compare",
+            "statePath": "state.json",
+            "stateRevision": 12,
+            "diffHash": "2d80dc31924ce95ffd1bb551bf720f1e76ad98605ed4ab190f7a093915764f4c",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-29T09:25:44+08:00"
+          },
+          {
+            "type": "machine",
+            "path": "evidence/code/T001-003.md",
+            "sha256": "414ab78f1686ae3b9f9feeb088e59f4faa988f8a1228368804b80f1f1403b645",
+            "jsonl": "evidence/code/T001-003.md.jsonl",
+            "command": "git diff --check",
+            "exitCode": 0,
+            "taskId": "T001",
+            "changeId": "add-text-compare",
+            "statePath": "state.json",
+            "stateRevision": 12,
+            "diffHash": "2d80dc31924ce95ffd1bb551bf720f1e76ad98605ed4ab190f7a093915764f4c",
+            "commitHash": "",
+            "producerType": "tydic-code",
+            "createdAt": "2026-07-29T09:25:44+08:00"
+          }
+        ],
+        "modifiedFiles": [
+          "src/main/resources/static/app/app.js",
+          "src/main/resources/static/index.html"
+        ],
+        "claimedAt": "2026-07-29T09:10:14+08:00",
+        "evidenceStateRevision": 12,
+        "completedAt": "2026-07-29T09:25:44+08:00"
+      }
+    }
+  },
+  "artifacts": {
+    "spec": {
+      "path": "spec.md",
+      "sha256": "cd244aefc89c0653a1a4f17f877b2d67c807407da4f3760ee359e9636550e483",
+      "status": "PASS",
+      "revision": 1
+    },
+    "design": {
+      "path": "design.md",
+      "sha256": "64ec6a8a8818766e50a937cda843cf6242f93846f99e52adb6d403d352738738",
+      "status": "PASS",
+      "revision": 1,
+      "specPath": "spec.md",
+      "specSha256": "cd244aefc89c0653a1a4f17f877b2d67c807407da4f3760ee359e9636550e483",
+      "specRevision": 1
+    },
+    "tickets": {
+      "path": "tickets.md",
+      "sha256": "c2d8195c7338e44184323fbe5d8e11ad01a3f2c02eecb234fd01628fc2342b9b",
+      "status": "PASS"
+    },
+    "reviewEvidence": {
+      "path": "evidence/review/final.md",
+      "sha256": "aec37cb73e1ba902601847f9813b2dbc4e06f647cc28e7b76a1cbfdd108b3fb8",
+      "status": "PASS"
+    }
+  },
+  "evidence": []
+}

@@ -16,7 +16,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompareStore {
   private static final Logger log = LoggerFactory.getLogger(CompareStore.class);
-  private static final Duration TTL = Duration.ofMinutes(30);
   private static final int DEFAULT_MAX_SESSIONS = 4;
   private static final long DEFAULT_MAX_BYTES = 2L * 1024L * 1024L * 1024L;
   private final Map<String, StoredCompare> store = new ConcurrentHashMap<>();
@@ -24,6 +23,10 @@ public class CompareStore {
   private int maxSessions = DEFAULT_MAX_SESSIONS;
   @Value("${jardiff.limits.max-compare-bytes:2147483648}")
   private long maxBytes = DEFAULT_MAX_BYTES;
+
+  /** 会话存活时长（分钟）。字段默认值供不经过 Spring 的测试构造器使用，不可去掉。 */
+  @Value("${jardiff.limits.session-ttl-minutes:30}")
+  private long sessionTtlMinutes = 30L;
 
   public CompareStore() {
   }
@@ -59,7 +62,7 @@ public class CompareStore {
   public synchronized Optional<StoredCompare> get(String id) {
     StoredCompare v = store.get(id);
     if (v == null) return Optional.empty();
-    if (v.getCreatedAt().plus(TTL).isBefore(Instant.now())) {
+    if (v.getCreatedAt().plus(sessionTtl()).isBefore(Instant.now())) {
       store.remove(id);
       v.closeQuietly();
       log.info("compare store expired id={}", id);
@@ -68,16 +71,20 @@ public class CompareStore {
     return Optional.of(v);
   }
 
-  @Scheduled(fixedDelay = 60_000L)
+  @Scheduled(fixedDelayString = "${jardiff.limits.session-cleanup-interval-ms:60000}")
   public synchronized void cleanup() {
     cleanupExpired(Instant.now());
+  }
+
+  private Duration sessionTtl() {
+    return Duration.ofMinutes(sessionTtlMinutes);
   }
 
   private void cleanupExpired(Instant now) {
     int removed = 0;
     for (Map.Entry<String, StoredCompare> e : store.entrySet()) {
       StoredCompare v = e.getValue();
-      if (v.getCreatedAt().plus(TTL).isBefore(now)) {
+      if (v.getCreatedAt().plus(sessionTtl()).isBefore(now)) {
         store.remove(e.getKey());
         v.closeQuietly();
         removed += 1;

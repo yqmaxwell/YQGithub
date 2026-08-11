@@ -50,6 +50,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.multipart.MultipartFile;
+// [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+import org.springframework.web.server.ResponseStatusException;
+// [AGC:END]
 
 @RestController
 @RequestMapping("/api")
@@ -66,6 +69,10 @@ public class CompareController {
   private final int maxDirMbPerSide;
   private final int maxWarmupDiffs;
   private final int defaultWarmupDiffs;
+  private final String defaultIgnoreGlobs;
+  // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+  private final boolean directoryCompareEnabled;
+  // [AGC:END]
   private final Map<String, String> fileTextCache = new HashMap<>();
 
   public CompareController(
@@ -78,7 +85,11 @@ public class CompareController {
       @Value("${jardiff.limits.max-dir-files-per-side:20000}") int maxDirFilesPerSide,
       @Value("${jardiff.limits.max-dir-mb-per-side:800}") int maxDirMbPerSide,
       @Value("${jardiff.limits.max-warmup-diffs:1200}") int maxWarmupDiffs,
-      @Value("${jardiff.limits.default-warmup-diffs:400}") int defaultWarmupDiffs) {
+      @Value("${jardiff.limits.default-warmup-diffs:400}") int defaultWarmupDiffs,
+      @Value("${jardiff.ignore.default-globs:}") String defaultIgnoreGlobs,
+      // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+      @Value("${jardiff.deployment-mode:local}") String deploymentMode) {
+    // [AGC:END]
     this.jarCompareService = jarCompareService;
     this.jarDiffService = jarDiffService;
     this.compareStore = compareStore;
@@ -89,12 +100,33 @@ public class CompareController {
     this.maxDirMbPerSide = Math.max(1, maxDirMbPerSide);
     this.maxWarmupDiffs = Math.max(1, maxWarmupDiffs);
     this.defaultWarmupDiffs = Math.max(1, defaultWarmupDiffs);
+    this.defaultIgnoreGlobs = defaultIgnoreGlobs == null ? "" : defaultIgnoreGlobs;
+    // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+    if (!"local".equals(deploymentMode) && !"server".equals(deploymentMode)) {
+      throw new IllegalArgumentException(
+          "jardiff.deployment-mode 仅支持 local 或 server，当前值：" + deploymentMode);
+    }
+    this.directoryCompareEnabled = "local".equals(deploymentMode);
+    // [AGC:END]
   }
 
   @GetMapping("/ping")
   public String ping() {
     return "ok";
   }
+
+  // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+  /**
+   * 返回当前部署允许前台使用的比对能力。
+   * @return 只包含目录比对开关的能力响应
+   */
+  @GetMapping(value = "/compare/capabilities", produces = MediaType.APPLICATION_JSON_VALUE)
+  public Map<String, Boolean> capabilities() {
+    Map<String, Boolean> capabilities = new HashMap<>();
+    capabilities.put("directoryCompareEnabled", directoryCompareEnabled);
+    return capabilities;
+  }
+  // [AGC:END]
 
   /**
    * 将常见的“compare not found”从 500 降级为 404，避免日志刷屏。
@@ -117,6 +149,20 @@ public class CompareController {
     log.warn("compare rejected by resource limit: {}", msg);
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).contentType(MediaType.TEXT_PLAIN).body(msg);
   }
+
+  // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+  /**
+   * 将部署模式拒绝转换为稳定的纯文本 HTTP 错误响应。
+   * @param ex 带 HTTP 状态和调用方提示的异常
+   * @return 对应状态及明确错误正文
+   */
+  @ExceptionHandler(ResponseStatusException.class)
+  public ResponseEntity<String> handleResponseStatus(ResponseStatusException ex) {
+    return ResponseEntity.status(ex.getStatus())
+        .contentType(new MediaType("text", "plain", StandardCharsets.UTF_8))
+        .body(ex.getReason());
+  }
+  // [AGC:END]
 
   @PostMapping(value = "/compare/jars", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public CompareResult compareJars(
@@ -225,6 +271,7 @@ public class CompareController {
     m.put("maxDirMb", maxDirMbPerSide);
     m.put("maxWarmupDiffs", maxWarmupDiffs);
     m.put("defaultWarmupDiffs", defaultWarmupDiffs);
+    m.put("defaultIgnoreGlobs", defaultIgnoreGlobs);
     return m;
   }
 
@@ -239,6 +286,9 @@ public class CompareController {
       @RequestParam(value = "ignoreGlobs", required = false) String ignoreGlobs,
       @RequestParam(value = "limitDirFiles", required = false) Integer limitDirFiles,
       @RequestParam(value = "limitDirMb", required = false) Integer limitDirMb) {
+    // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+    ensureDirectoryCompareEnabled();
+    // [AGC:END]
     log.info(
         "compareDirectory start leftCount={} rightCount={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={} limitDirFiles={} limitDirMb={}",
         leftFiles == null ? 0 : leftFiles.length,
@@ -276,6 +326,9 @@ public class CompareController {
       @RequestParam(value = "ignoreGlobs", required = false) String ignoreGlobs,
       @RequestParam(value = "limitDirFiles", required = false) Integer limitDirFiles,
       @RequestParam(value = "limitDirMb", required = false) Integer limitDirMb) {
+    // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+    ensureDirectoryCompareEnabled();
+    // [AGC:END]
     Path leftDir = normalizeDirectoryPath(leftPath, "左侧目录");
     Path rightDir = normalizeDirectoryPath(rightPath, "右侧目录");
     log.info(
@@ -298,6 +351,40 @@ public class CompareController {
     Stats stats = result == null ? null : result.getStats();
     log.info(
         "compareDirectoryByPath done id={} added={} missing={} modified={} unchanged={}",
+        result == null ? "" : result.getId(),
+        stats == null ? 0 : stats.getAdded(),
+        stats == null ? 0 : stats.getMissing(),
+        stats == null ? 0 : stats.getModified(),
+        stats == null ? 0 : stats.getUnchanged());
+    return result;
+  }
+
+  @PostMapping(value = "/compare/jars/path", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public CompareResult compareJarsByPath(
+      @RequestParam("leftPath") String leftPath,
+      @RequestParam("rightPath") String rightPath,
+      @RequestParam(value = "includeLib", defaultValue = "true") boolean includeLib,
+      @RequestParam(value = "includeClasses", defaultValue = "true") boolean includeClasses,
+      @RequestParam(value = "includeResources", defaultValue = "true") boolean includeResources,
+      @RequestParam(value = "deepCompareLib", defaultValue = "false") boolean deepCompareLib,
+      @RequestParam(value = "ignoreGlobs", required = false) String ignoreGlobs) {
+    ensureDirectoryCompareEnabled();
+    Path leftJar = normalizeJarPath(leftPath, "旧版 Jar");
+    Path rightJar = normalizeJarPath(rightPath, "新版 Jar");
+    log.info(
+        "compareJarsByPath start leftJar={} rightJar={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={}",
+        leftJar,
+        rightJar,
+        includeLib,
+        includeClasses,
+        includeResources,
+        deepCompareLib,
+        ignoreGlobs);
+    CompareOptions options = new CompareOptions(includeLib, includeClasses, includeResources, deepCompareLib, splitIgnore(ignoreGlobs));
+    CompareResult result = jarCompareService.compareJarsByPath(leftJar, rightJar, options);
+    Stats stats = result == null ? null : result.getStats();
+    log.info(
+        "compareJarsByPath done id={} added={} missing={} modified={} unchanged={}",
         result == null ? "" : result.getId(),
         stats == null ? 0 : stats.getAdded(),
         stats == null ? 0 : stats.getMissing(),
@@ -331,6 +418,18 @@ public class CompareController {
       throw new IllegalArgumentException(label + "过大（" + formatBytes(size) + "），超过上限 " + formatBytes(max) + "，已禁止比对");
     }
   }
+
+  // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+  /**
+   * 在任何目录或文件访问前执行服务器端目录能力校验。
+   * @throws ResponseStatusException 当前部署禁止目录比对时返回 HTTP 403
+   */
+  private void ensureDirectoryCompareEnabled() {
+    if (directoryCompareEnabled) return;
+    log.warn("[directoryCompare][skip] FuncName=ensureDirectoryCompareEnabled, result=forbidden");
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "服务器模式禁止目录比对");
+  }
+  // [AGC:END]
 
   /**
    * 校验目录上传：文件数量与总大小，超出上限则抛出异常并拒绝比对。
@@ -374,6 +473,26 @@ public class CompareController {
     } catch (AccessDeniedException e) {
       throw new IllegalArgumentException(label + "无权限访问：" + p);
     } catch (IOException ignored) {
+    }
+    return p;
+  }
+
+  private Path normalizeFilePath(String raw, String label) {
+    String s = sanitizeDirectoryPathInput(raw);
+    if (s.isEmpty()) throw new IllegalArgumentException(label + "路径为空");
+    Path p = Paths.get(s).toAbsolutePath().normalize();
+    if (Files.notExists(p)) throw new IllegalArgumentException(label + "不存在：" + p);
+    if (!Files.isRegularFile(p)) throw new IllegalArgumentException(label + "不是文件：" + p);
+    if (!Files.isReadable(p)) throw new IllegalArgumentException(label + "无权限读取：" + p);
+    return p;
+  }
+
+  private Path normalizeJarPath(String raw, String label) {
+    Path p = normalizeFilePath(raw, label);
+    String name = p.getFileName() != null ? p.getFileName().toString() : "";
+    String lower = name.toLowerCase();
+    if (!lower.endsWith(".jar") && !lower.endsWith(".zip") && !lower.endsWith(".war")) {
+      throw new IllegalArgumentException(label + "不是 jar/zip/war 文件：" + p);
     }
     return p;
   }
@@ -491,6 +610,78 @@ public class CompareController {
     }
   }
 
+  @PostMapping(value = "/compare/files/path", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public Map<String, Object> compareFilesByPath(
+      @RequestParam("leftPath") String leftPath,
+      @RequestParam("rightPath") String rightPath) {
+    ensureDirectoryCompareEnabled();
+    Path leftFile = normalizeFilePath(leftPath, "左侧文件");
+    Path rightFile = normalizeFilePath(rightPath, "右侧文件");
+    log.info("[jarDiff][start] FuncName=CompareController.compareFilesByPath, left={}, right={}", leftFile, rightFile);
+    Map<String, Object> res = new HashMap<>();
+    try {
+      byte[] leftBytes = Files.readAllBytes(leftFile);
+      byte[] rightBytes = Files.readAllBytes(rightFile);
+      String leftName = leftFile.getFileName() != null ? leftFile.getFileName().toString() : "left";
+      String rightName = rightFile.getFileName() != null ? rightFile.getFileName().toString() : "right";
+      String leftText = getFileText(leftBytes, leftName);
+      String rightText = getFileText(rightBytes, rightName);
+      boolean decompiled = isClassFile(leftBytes) || isClassFile(rightBytes);
+
+      String id = java.util.UUID.randomUUID().toString().replace("-", "");
+      String leftMd5 = digestService.md5(leftBytes);
+      String rightMd5 = digestService.md5(rightBytes);
+
+      res.put("id", id);
+      Map<String, String> leftMeta = new HashMap<>();
+      leftMeta.put("name", leftName);
+      leftMeta.put("md5", leftMd5);
+      res.put("left", leftMeta);
+      Map<String, String> rightMeta = new HashMap<>();
+      rightMeta.put("name", rightName);
+      rightMeta.put("md5", rightMd5);
+      res.put("right", rightMeta);
+      res.put("type", "text");
+      res.put("decompiled", decompiled);
+
+      fileTextCache.put(id + ":left", leftText);
+      fileTextCache.put(id + ":right", rightText);
+      log.info("[jarDiff][end] FuncName=CompareController.compareFilesByPath, id={}, decompiled={}, leftLen={}, rightLen={}",
+          id, decompiled, leftText != null ? leftText.length() : 0, rightText != null ? rightText.length() : 0);
+    } catch (IOException e) {
+      log.error("[jarDiff][fail] FuncName=CompareController.compareFilesByPath, errorCode=FILE_COMPARE_IO_ERR, reason={}", e.getMessage(), e);
+      res.put("error", e.getMessage());
+    }
+    return res;
+  }
+
+  @PostMapping(value = "/compare/files/unified/path", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ResponseEntity<String> filesUnifiedDiffByPath(
+      @RequestParam("leftPath") String leftPath,
+      @RequestParam("rightPath") String rightPath) {
+    ensureDirectoryCompareEnabled();
+    Path leftFile = normalizeFilePath(leftPath, "左侧文件");
+    Path rightFile = normalizeFilePath(rightPath, "右侧文件");
+    log.info("[jarDiff][start] FuncName=CompareController.filesUnifiedDiffByPath, left={}, right={}", leftFile, rightFile);
+    try {
+      byte[] leftBytes = Files.readAllBytes(leftFile);
+      byte[] rightBytes = Files.readAllBytes(rightFile);
+      String leftText = getFileText(leftBytes, leftFile.getFileName() != null ? leftFile.getFileName().toString() : "left");
+      String rightText = getFileText(rightBytes, rightFile.getFileName() != null ? rightFile.getFileName().toString() : "right");
+
+      if (leftText == null || rightText == null) {
+        log.info("[jarDiff][end] FuncName=CompareController.filesUnifiedDiffByPath, result=EMPTY_NON_TEXT");
+        return ResponseEntity.ok("");
+      }
+      String diff = jarDiffService.unifiedDiff(leftText, rightText);
+      log.info("[jarDiff][end] FuncName=CompareController.filesUnifiedDiffByPath, resultLength={}", diff != null ? diff.length() : 0);
+      return ResponseEntity.ok(diff);
+    } catch (IOException e) {
+      log.error("[jarDiff][fail] FuncName=CompareController.filesUnifiedDiffByPath, errorCode=FILE_UNIFIED_IO_ERR, reason={}", e.getMessage(), e);
+      return ResponseEntity.ok("");
+    }
+  }
+
   // [AGC:START] tool=Cc author=maxwell date=2026-07-24
   private String getFileText(byte[] bytes, String name) {
     if (bytes == null) return null;
@@ -547,6 +738,9 @@ public class CompareController {
   public DirectorySummaryResult directorySummary(
       @RequestParam("leftFiles") MultipartFile[] leftFiles,
       @RequestParam("rightFiles") MultipartFile[] rightFiles) {
+    // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+    ensureDirectoryCompareEnabled();
+    // [AGC:END]
     log.info(
         "directorySummary start leftCount={} rightCount={}",
         leftFiles == null ? 0 : leftFiles.length,
@@ -586,9 +780,13 @@ public class CompareController {
         .body(bytes);
   }
 
+  /**
+   * 解析忽略规则。请求未指定（null/空白）时回退到配置文件预置的
+   * {@code jardiff.ignore.default-globs}；请求已指定则以请求值为准。
+   */
   private String[] splitIgnore(String raw) {
-    if (raw == null) return null;
-    String s = raw.trim();
+    String s = raw == null ? "" : raw.trim();
+    if (s.isEmpty()) s = defaultIgnoreGlobs.trim();
     if (s.isEmpty()) return null;
     String[] parts = s.replace("\r\n", "\n").replace("\r", "\n").split("[\n,;]+");
     List<String> out = new ArrayList<>();
@@ -1092,9 +1290,11 @@ class CompareConcurrencyFilter extends OncePerRequestFilter {
     if (uri == null) return false;
     if (!uri.startsWith("/api/compare/")) return false;
     return "/api/compare/jars".equals(uri)
+        || "/api/compare/jars/path".equals(uri)
         || "/api/compare/directory".equals(uri)
         || "/api/compare/directory/path".equals(uri)
         || "/api/compare/directory/summary".equals(uri)
-        || "/api/compare/files".equals(uri);
+        || "/api/compare/files".equals(uri)
+        || "/api/compare/files/path".equals(uri);
   }
 }

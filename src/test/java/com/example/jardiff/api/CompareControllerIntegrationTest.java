@@ -33,6 +33,15 @@ public class CompareControllerIntegrationTest {
   @Autowired
   private ObjectMapper objectMapper;
 
+  // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+  @Test
+  public void capabilities_defaultLocalModeEnablesDirectoryCompare() throws Exception {
+    mockMvc.perform(get("/api/compare/capabilities"))
+        .andExpect(status().isOk())
+        .andExpect(content().json("{\"directoryCompareEnabled\":true}"));
+  }
+  // [AGC:END]
+
   @Test
   public void jarCompareAndUnifiedDiff_returnsValidFormat() throws Exception {
     // Build two JARs with a differing text file

@@ -68,6 +68,16 @@
     return await fetchJson('/api/compare/directory/path', { method: 'POST', body: fd })
   }
 
+  // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+  /**
+   * 读取当前部署允许前台展示的比对能力。
+   * @returns {Promise<{directoryCompareEnabled:boolean}>}
+   */
+  async function getCapabilities() {
+    return await fetchJson('/api/compare/capabilities')
+  }
+  // [AGC:END]
+
   async function loadDiff(id, path) {
     const url =
       '/api/compare/diff?id=' + encodeURIComponent(id) + '&path=' + encodeURIComponent(path || '')
@@ -137,12 +147,56 @@
     return await resp.text()
   }
 
+  // ===== 桌面工具原生文件选择器桥接（异步：FileChooser 在 JavaFX 线程弹，选定后回调 onChosen）=====
+  var chosenCallback = null
+  window.__jardiffOnChosen = function (path) {
+    if (chosenCallback) { var cb = chosenCallback; chosenCallback = null; cb(path) }
+  }
+  function chooseJar(title, onChosen) {
+    if (!window.jardiffBridge) { onChosen && onChosen(null); return }
+    chosenCallback = onChosen || null
+    window.jardiffBridge.chooseJar(title)
+  }
+  function chooseDirectory(title, onChosen) {
+    if (!window.jardiffBridge) { onChosen && onChosen(null); return }
+    chosenCallback = onChosen || null
+    window.jardiffBridge.chooseDirectory(title)
+  }
+  function chooseFile(title, onChosen) {
+    if (!window.jardiffBridge) { onChosen && onChosen(null); return }
+    chosenCallback = onChosen || null
+    window.jardiffBridge.chooseFile(title)
+  }
+
+  /** 按本地路径比对两个 jar（桌面工具用，替代上传）。 */
+  async function compareJarsByPath(fd) {
+    return await fetchJson('/api/compare/jars/path', { method: 'POST', body: fd })
+  }
+
+  /** 按本地路径比对两个文件（支持 .class 反编译）。 */
+  async function compareFilesByPath(fd) {
+    return await fetchJson('/api/compare/files/path', { method: 'POST', body: fd })
+  }
+
+  /** 按本地路径获取两个文件比对的统一差异文本。 */
+  async function loadFilesUnifiedDiffByPath(leftPath, rightPath) {
+    const fd = new FormData()
+    fd.append('leftPath', leftPath)
+    fd.append('rightPath', rightPath)
+    const resp = await fetch('/api/compare/files/unified/path', { method: 'POST', body: fd })
+    if (!resp.ok) throw new Error('请求失败：' + resp.status)
+    return await resp.text()
+  }
+
   window.JarDiff = window.JarDiff || {}
   window.JarDiff.api = {
     compareJars,
     compareDirectorySummary,
     compareDirectory,
     compareDirectoryByPath,
+    // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+    getCapabilities,
+    // [AGC:END]
     loadDiff,
     warmDiffs,
     warmDiffStatus,
@@ -151,6 +205,12 @@
     loadNestedTree,
     loadUnifiedDiff,
     compareFiles,
-    loadFilesUnifiedDiff
+    loadFilesUnifiedDiff,
+    compareJarsByPath,
+    compareFilesByPath,
+    loadFilesUnifiedDiffByPath,
+    chooseJar,
+    chooseDirectory,
+    chooseFile
   }
 })()

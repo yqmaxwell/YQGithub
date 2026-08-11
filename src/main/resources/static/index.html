@@ -59,6 +59,9 @@
         font-family: var(--sans);
         font-size: 14px;
         line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
       }
 
       #app { min-height: 100vh; display: flex; flex-direction: column; }
@@ -378,6 +381,13 @@
       .source-field__step { display: inline-flex; height: 20px; min-width: 28px; align-items: center; justify-content: center; border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-muted); font-family: var(--mono); font-size: 10px; }
       .source-field__label { color: var(--text-primary); font-size: 12px; font-weight: 700; }
       .source-field__control { display: flex; min-width: 0; flex: 1; flex-direction: column; justify-content: center; gap: 10px; padding: 20px; }
+      /* [AGC:START] tool=Cc author=maxwell date=2026-07-29 */
+      .source-grid--text .source-field { min-height: 320px; }
+      .source-grid--text .source-field__control { justify-content: stretch; padding: 12px; }
+      .text-source-input { width: 100%; min-height: 238px; flex: 1; resize: none; overflow: auto; padding: 12px; border: 1px solid var(--border-default); border-radius: 5px; outline: none; background: var(--bg-primary); color: var(--text-primary); font-family: var(--mono); font-size: 13px; line-height: 1.55; }
+      .text-source-input::placeholder { color: var(--text-muted); }
+      .text-source-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(9, 105, 218, .12); }
+      /* [AGC:END] */
       .source-field__value { overflow: hidden; min-height: 28px; padding: 6px 9px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--bg-secondary); color: var(--text-secondary); font-family: var(--mono); font-size: 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
       .source-upload, .source-upload .el-upload { display: block; width: 100%; }
       .upload-button { width: 100%; height: 38px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); font-weight: 600; }
@@ -386,6 +396,10 @@
       .source-divider span { height: 1px; background: var(--border-default); }
       .source-divider b { padding: 4px 6px; border: 1px solid var(--border-default); border-radius: 999px; background: var(--bg-primary); font-family: var(--mono); font-size: 10px; font-weight: 700; text-align: center; white-space: nowrap; }
       .setup-options { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-top: 18px; padding: 14px 0 0; border-top: 1px solid var(--border-default); }
+      /* [AGC:START] tool=Cc author=maxwell date=2026-07-29 */
+      .setup-options--text { justify-content: flex-end; }
+      .text-compare-hint { color: var(--text-muted); font-size: 12px; }
+      /* [AGC:END] */
       .setup-ignore-wrap { min-width: 0; flex: 1; }
       .setup-ignore-wrap .setup-section-label { margin-left: 0; }
       .ignore-trigger { display: inline-flex; width: min(240px, 100%); height: 34px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -397,7 +411,7 @@
       .ignore-popover .el-textarea__inner { font-family: var(--mono); font-size: 12px; line-height: 1.5; }
       .compare-button { display: inline-flex; min-width: 148px; height: 38px; align-items: center; justify-content: space-between; gap: 22px; padding: 0 14px; border: 1px solid #1f2328; border-radius: 5px; background: #1f2328; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
       .compare-button:hover { background: var(--accent); border-color: var(--accent); }
-      .compare-button:disabled { opacity: .55; cursor: wait; }
+      .compare-button:disabled { opacity: .55; cursor: not-allowed; }
       .result-toolbar { background: var(--bg-secondary); }
       .result-toolbar__path { overflow: hidden; max-width: min(55vw, 720px); color: var(--text-secondary); font-family: var(--mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
       .result-toolbar__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
@@ -469,6 +483,10 @@
         .setup-intro h1 { font-size: 24px; }
         .source-grid { grid-template-columns: 1fr; gap: 10px; }
         .source-field { min-height: 150px; }
+        /* [AGC:START] tool=Cc author=maxwell date=2026-07-29 */
+        .source-grid--text .source-field { min-height: 250px; }
+        .text-source-input { min-height: 176px; }
+        /* [AGC:END] */
         .source-divider { grid-template-columns: 1fr; grid-template-rows: 1fr auto 1fr; width: 58px; height: 42px; justify-self: center; justify-items: center; gap: 3px; padding: 0; }
         .source-divider span { width: 1px; height: 100%; }
         .source-divider b { transform: none; }

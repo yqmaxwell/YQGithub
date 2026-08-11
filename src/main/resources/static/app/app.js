@@ -62,19 +62,23 @@
         <header class="setup-header">
           <div class="brand-lockup"><span class="brand-mark">JD</span><span>Jar Diff</span></div>
           <span class="setup-header__path">新建比对</span>
-          <div class="setup-header__actions"><span class="setup-header__status">本地版本比对</span></div>
+          <!-- [AGC:START] tool=Cc date=2026-07-29 author=maxwell -->
+          <div class="setup-header__actions"><span class="setup-header__status">版本比对</span></div>
+          <!-- [AGC:END] -->
         </header>
         <div class="setup-configbar">
           <div class="setup-configbar__group">
             <span class="setup-configbar__label">比对类型</span>
             <div class="mode-tabs" role="tablist" aria-label="比对类型">
-              <button v-for="m in modes" :key="m.value" role="tab" :aria-selected="mode === m.value" :aria-label="'切换到' + m.label + '比对'" :class="['mode-tab', { 'mode-tab--active': mode === m.value }]" @click="switchMode(m.value)">
+              <!-- [AGC:START] tool=Cc date=2026-07-29 author=maxwell -->
+              <button v-for="m in visibleModes" :key="m.value" role="tab" :aria-selected="mode === m.value" :aria-label="'切换到' + m.label + '比对'" :class="['mode-tab', { 'mode-tab--active': mode === m.value }]" @click="switchMode(m.value)">
                 <span>{{ m.label }}</span>
               </button>
+              <!-- [AGC:END] -->
             </div>
           </div>
-          <span class="setup-configbar__separator"></span>
-          <div class="setup-configbar__group">
+          <span v-if="mode!=='text'" class="setup-configbar__separator"></span>
+          <div v-if="mode!=='text'" class="setup-configbar__group">
             <span class="setup-configbar__label">比对范围</span>
             <div class="setup-checks">
               <button type="button" :class="['scope-chip', { 'scope-chip--active': setting.includeClasses }]" :aria-pressed="setting.includeClasses" @click="toggleScope('includeClasses')"><span></span>Class 文件</button>
@@ -89,31 +93,39 @@
             <p>选择旧版与新版，生成结构树和文件差异。</p>
           </div>
           <div class="setup-workspace">
-            <div class="source-grid">
-                <div :class="['source-field', { 'source-field--ready': (mode==='jar' && jarLeftFile) || (mode==='file' && fileLeftFile) || (mode==='dir' && dirLeft) }]">
-                  <div class="source-field__head"><span class="source-field__step">01</span><span class="source-field__label">旧版本</span></div>
+            <div :class="['source-grid', { 'source-grid--text': mode==='text' }]">
+                <div :class="['source-field', { 'source-field--ready': (mode==='jar' && jarLeftPath) || (mode==='file' && fileLeftPath) || (mode==='dir' && dirLeft) || (mode==='text' && textLeft !== '') }]">
+                  <div class="source-field__head"><span class="source-field__step">01</span><span class="source-field__label">{{ mode === 'text' ? '旧版文本' : '旧版本' }}</span></div>
                   <div class="source-field__control">
-                    <el-upload v-if="mode==='jar'" :auto-upload="false" :limit="1" class="source-upload" @change="onJarLeftChange"><el-button class="upload-button" size="large">选择旧版 Jar</el-button></el-upload>
-                    <el-upload v-if="mode==='file'" :auto-upload="false" :limit="1" class="source-upload" @change="onFileLeftChange"><el-button class="upload-button" size="large">选择旧版文件</el-button></el-upload>
+                    <button v-if="mode==='jar'" type="button" class="upload-button" @click="onChooseJarLeft">选择旧版 Jar</button>
+                    <button v-if="mode==='file'" type="button" class="upload-button" @click="onChooseFileLeft">选择旧版文件</button>
                     <el-input v-if="mode==='dir'" v-model="dirLeft" placeholder="输入旧版目录路径" size="large" />
-                    <span v-if="mode==='jar' && jarLeftFile" class="source-field__value">{{ jarLeftFile.name }}</span>
-                    <span v-if="mode==='file' && fileLeftFile" class="source-field__value">{{ fileLeftFile.name }}</span>
+                    <button v-if="mode==='dir'" type="button" class="upload-button" @click="onChooseDirLeft">浏览…</button>
+                    <!-- [AGC:START] tool=Cc author=maxwell date=2026-07-29 -->
+                    <textarea v-if="mode==='text'" v-model="textLeft" class="text-source-input" placeholder="粘贴旧版文本" aria-label="旧版文本"></textarea>
+                    <!-- [AGC:END] -->
+                    <span v-if="mode==='jar' && jarLeftPath" class="source-field__value" :title="jarLeftPath">{{ jarLeftPath }}</span>
+                    <span v-if="mode==='file' && fileLeftPath" class="source-field__value" :title="fileLeftPath">{{ fileLeftPath }}</span>
                   </div>
                 </div>
                 <div class="source-divider" aria-hidden="true"><span></span><b>旧 → 新</b><span></span></div>
-                <div :class="['source-field', { 'source-field--ready': (mode==='jar' && jarRightFile) || (mode==='file' && fileRightFile) || (mode==='dir' && dirRight) }]">
-                  <div class="source-field__head"><span class="source-field__step">02</span><span class="source-field__label">新版本</span></div>
+                <div :class="['source-field', { 'source-field--ready': (mode==='jar' && jarRightPath) || (mode==='file' && fileRightPath) || (mode==='dir' && dirRight) || (mode==='text' && textRight !== '') }]">
+                  <div class="source-field__head"><span class="source-field__step">02</span><span class="source-field__label">{{ mode === 'text' ? '新版文本' : '新版本' }}</span></div>
                   <div class="source-field__control">
-                    <el-upload v-if="mode==='jar'" :auto-upload="false" :limit="1" class="source-upload" @change="onJarRightChange"><el-button class="upload-button" size="large">选择新版 Jar</el-button></el-upload>
-                    <el-upload v-if="mode==='file'" :auto-upload="false" :limit="1" class="source-upload" @change="onFileRightChange"><el-button class="upload-button" size="large">选择新版文件</el-button></el-upload>
+                    <button v-if="mode==='jar'" type="button" class="upload-button" @click="onChooseJarRight">选择新版 Jar</button>
+                    <button v-if="mode==='file'" type="button" class="upload-button" @click="onChooseFileRight">选择新版文件</button>
                     <el-input v-if="mode==='dir'" v-model="dirRight" placeholder="输入新版目录路径" size="large" />
-                    <span v-if="mode==='jar' && jarRightFile" class="source-field__value">{{ jarRightFile.name }}</span>
-                    <span v-if="mode==='file' && fileRightFile" class="source-field__value">{{ fileRightFile.name }}</span>
+                    <button v-if="mode==='dir'" type="button" class="upload-button" @click="onChooseDirRight">浏览…</button>
+                    <!-- [AGC:START] tool=Cc author=maxwell date=2026-07-29 -->
+                    <textarea v-if="mode==='text'" v-model="textRight" class="text-source-input" placeholder="粘贴新版文本" aria-label="新版文本"></textarea>
+                    <!-- [AGC:END] -->
+                    <span v-if="mode==='jar' && jarRightPath" class="source-field__value" :title="jarRightPath">{{ jarRightPath }}</span>
+                    <span v-if="mode==='file' && fileRightPath" class="source-field__value" :title="fileRightPath">{{ fileRightPath }}</span>
                   </div>
                 </div>
               </div>
-            <div class="setup-options">
-              <div class="setup-ignore-wrap">
+            <div :class="['setup-options', { 'setup-options--text': mode==='text' }]">
+              <div v-if="mode!=='text'" class="setup-ignore-wrap">
                 <span class="setup-section-label">忽略规则</span>
                 <el-popover placement="top-start" trigger="click" width="520" popper-class="ignore-popover">
                   <template #reference>
@@ -128,7 +140,10 @@
                   </div>
                 </el-popover>
               </div>
-              <button class="compare-button" @click="startCompare" :disabled="comparing"><span>{{ comparing ? '正在建立索引...' : '开始比对' }}</span><span aria-hidden="true">→</span></button>
+              <!-- [AGC:START] tool=Cc author=maxwell date=2026-07-29 -->
+              <span v-if="mode==='text' && !canStartTextCompare" class="text-compare-hint">请至少粘贴一侧文本</span>
+              <button class="compare-button" @click="startCompare" :disabled="comparing || (mode==='text' && !canStartTextCompare)"><span>{{ comparing ? '正在建立索引...' : '开始比对' }}</span><span aria-hidden="true">→</span></button>
+              <!-- [AGC:END] -->
             </div>
           </div>
         </main>
@@ -346,11 +361,23 @@
 
     setup: function () {
       // --- state ---
-      var mode = ref(JarDiff.storage.get('mode') || 'jar')
-      var modes = [{ value: 'jar', label: 'Jar 包' }, { value: 'dir', label: '目录' }, { value: 'file', label: '文件' }]
+      // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+      var storedMode = JarDiff.storage.get('mode') || 'jar'
+      var mode = ref(storedMode === 'dir' ? 'jar' : storedMode)
+      // [AGC:END]
+      var modes = [{ value: 'jar', label: 'Jar 包' }, { value: 'dir', label: '目录' }, { value: 'file', label: '文件' }, { value: 'text', label: '文本' }]
+      // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+      var directoryCompareEnabled = ref(false)
+      // [AGC:END]
       var dirLeft = ref(''), dirRight = ref('')
-      var ignoreGlobs = ref(JarDiff.storage.get('ignore') || JarDiff.core.DEFAULT_IGNORE_SPRINGBOOT || '')
-      var compareId = ref(JarDiff.storage.get('compareId') || '')
+      // [AGC:START] tool=Cc author=maxwell date=2026-07-29
+      var textLeft = ref(''), textRight = ref('')
+      // [AGC:END]
+      // 忽略规则初值：优先取用户本地保存的值；为空时由 onMounted 从后端配置的 jardiff.ignore.default-globs 填充
+      var ignoreGlobs = ref(JarDiff.storage.get('ignore') || '')
+      // [AGC:START] tool=Cc author=maxwell date=2026-07-29
+      var compareId = ref('')
+      // [AGC:END]
       var treeData = ref([])
       var selectedPath = ref(null)
       var diffHtml = ref('')
@@ -376,10 +403,14 @@
       var diffRequestSeq = ref(0)
       var hunkTargets = ref([])
       var hunkIndex = ref(0)
-      var jarLeftFile = ref(null)
-      var jarRightFile = ref(null)
-      var fileLeftFile = ref(null)
-      var fileRightFile = ref(null)
+      var jarLeftPath = ref('')
+      var jarRightPath = ref('')
+      var fileLeftPath = ref('')
+      var fileRightPath = ref('')
+      // [AGC:START] tool=Cc author=maxwell date=2026-07-29
+      var textLeftFile = ref(null)
+      var textRightFile = ref(null)
+      // [AGC:END]
       var resize = reactive({ done: true, x: 0, w: 0 })
       var showSettings = ref(false)
       var setting = reactive({
@@ -389,6 +420,12 @@
       })
 
       // --- computed ---
+      // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+      var visibleModes = computed(function () {
+        return modes.filter(function (item) { return item.value !== 'dir' || directoryCompareEnabled.value })
+      })
+      // [AGC:END]
+
       var stats = computed(function () {
         var s = { modified: 0, added: 0, missing: 0, meta: 0 }
         ;(function walk(nodes) {
@@ -443,11 +480,17 @@
 
       var hunkCount = computed(function () { return hunkTargets.value.length })
       var ignoreRuleCount = computed(function () { return JarDiff.core.splitIgnoreGlobs(ignoreGlobs.value).length })
+      // [AGC:START] tool=Cc author=maxwell date=2026-07-29
+      var canStartTextCompare = computed(function () { return textLeft.value !== '' || textRight.value !== '' })
+      // [AGC:END]
 
       var compareLabel = computed(function () {
-        if (mode.value === 'jar' && jarLeftFile.value && jarRightFile.value) return jarLeftFile.value.name + '  vs  ' + jarRightFile.value.name
+        if (mode.value === 'jar' && jarLeftPath.value && jarRightPath.value) return baseName(jarLeftPath.value) + '  vs  ' + baseName(jarRightPath.value)
         if (mode.value === 'dir') return (dirLeft.value || '旧版目录') + '  vs  ' + (dirRight.value || '新版目录')
-        if (mode.value === 'file' && fileLeftFile.value && fileRightFile.value) return fileLeftFile.value.name + '  vs  ' + fileRightFile.value.name
+        if (mode.value === 'file' && fileLeftPath.value && fileRightPath.value) return baseName(fileLeftPath.value) + '  vs  ' + baseName(fileRightPath.value)
+        // [AGC:START] tool=Cc author=maxwell date=2026-07-29
+        if (mode.value === 'text') return 'pasted-text.txt'
+        // [AGC:END]
         return '当前比对'
       })
 
@@ -509,10 +552,13 @@
         JarDiff.storage.set('compareId', '')
       }
 
-      function onJarLeftChange(file) { jarLeftFile.value = file && file.raw }
-      function onJarRightChange(file) { jarRightFile.value = file && file.raw }
-      function onFileLeftChange(file) { fileLeftFile.value = file && file.raw }
-      function onFileRightChange(file) { fileRightFile.value = file && file.raw }
+      function baseName(p) { return p ? String(p).replace(/^.*[/\\]/, '') : '' }
+      function onChooseJarLeft() { JarDiff.api.chooseJar('选择旧版 Jar', function (p) { if (p) jarLeftPath.value = p }) }
+      function onChooseJarRight() { JarDiff.api.chooseJar('选择新版 Jar', function (p) { if (p) jarRightPath.value = p }) }
+      function onChooseFileLeft() { JarDiff.api.chooseFile('选择旧版文件', function (p) { if (p) fileLeftPath.value = p }) }
+      function onChooseFileRight() { JarDiff.api.chooseFile('选择新版文件', function (p) { if (p) fileRightPath.value = p }) }
+      function onChooseDirLeft() { JarDiff.api.chooseDirectory('选择旧版目录', function (p) { if (p) dirLeft.value = p }) }
+      function onChooseDirRight() { JarDiff.api.chooseDirectory('选择新版目录', function (p) { if (p) dirRight.value = p }) }
 
       function startCompare() {
         comparing.value = true
@@ -530,24 +576,23 @@
           hunkTargets.value = []
           hunkIndex.value = 0
           Object.keys(nestedStates).forEach(function (key) { delete nestedStates[key] })
-          JarDiff.storage.set('compareId', result.id)
-          if (mode.value === 'file') {
+          if (mode.value === 'file' || mode.value === 'text') {
             // 文件接口只返回元数据和缓存 id，Diff 仍需提交原始两个文件。
-            selectedPath.value = (result.left && result.left.name) || 'file'
-            loadFileDiff(fileLeftFile.value, fileRightFile.value)
+            selectedPath.value = mode.value === 'text' ? 'pasted-text.txt' : ((result.left && result.left.name) || 'file')
+            loadFileDiff()
           }
         }
         if (mode.value === 'jar') {
-          if (!jarLeftFile.value || !jarRightFile.value) { comparing.value = false; return }
+          if (!jarLeftPath.value || !jarRightPath.value) { comparing.value = false; return }
           var fd = new FormData()
-          fd.append('leftJar', jarLeftFile.value)
-          fd.append('rightJar', jarRightFile.value)
+          fd.append('leftPath', jarLeftPath.value)
+          fd.append('rightPath', jarRightPath.value)
           fd.append('includeLib', setting.includeLib)
           fd.append('includeClasses', setting.includeClasses)
           fd.append('includeResources', setting.includeResources)
           if (setting.includeLib) fd.append('deepCompareLib', 'true')
           fd.append('ignoreGlobs', ignoreGlobs.value)
-          JarDiff.api.compareJars(fd, null).then(onDone.bind(null, null)).catch(onDone)
+          JarDiff.api.compareJarsByPath(fd).then(onDone.bind(null, null)).catch(onDone)
         } else if (mode.value === 'dir') {
           var leftPath = dirLeft.value.trim()
           var rightPath = dirRight.value.trim()
@@ -562,11 +607,21 @@
           dfd.append('ignoreGlobs', ignoreGlobs.value)
           JarDiff.api.compareDirectoryByPath(dfd).then(onDone.bind(null, null)).catch(onDone)
         } else if (mode.value === 'file') {
-          if (!fileLeftFile.value || !fileRightFile.value) { comparing.value = false; return }
+          if (!fileLeftPath.value || !fileRightPath.value) { comparing.value = false; return }
           var ffd = new FormData()
-          ffd.append('left', fileLeftFile.value)
-          ffd.append('right', fileRightFile.value)
-          JarDiff.api.compareFiles(ffd, null).then(function (r) { onDone(null, r) }).catch(onDone)
+          ffd.append('leftPath', fileLeftPath.value)
+          ffd.append('rightPath', fileRightPath.value)
+          JarDiff.api.compareFilesByPath(ffd).then(function (r) { onDone(null, r) }).catch(onDone)
+        // [AGC:START] tool=Cc author=maxwell date=2026-07-29
+        } else if (mode.value === 'text') {
+          if (!canStartTextCompare.value) { comparing.value = false; return }
+          textLeftFile.value = new File([textLeft.value], 'pasted-text.txt', { type: 'text/plain;charset=utf-8' })
+          textRightFile.value = new File([textRight.value], 'pasted-text.txt', { type: 'text/plain;charset=utf-8' })
+          var tfd = new FormData()
+          tfd.append('left', textLeftFile.value)
+          tfd.append('right', textRightFile.value)
+          JarDiff.api.compareFiles(tfd, null).then(function (r) { onDone(null, r) }).catch(onDone)
+        // [AGC:END]
         }
       }
 
@@ -586,12 +641,15 @@
       }
 
       // [AGC:START] tool=Cc author=maxwell date=2026-07-27
-      function loadFileDiff(leftFile, rightFile) {
+      function loadFileDiff() {
         var requestId = ++diffRequestSeq.value
         diffLoading.value = true
         diffError.value = ''
         var api = window.JarDiff.api
-        api.loadFilesUnifiedDiff(leftFile, rightFile).then(function (text) {
+        var promise = mode.value === 'file'
+          ? api.loadFilesUnifiedDiffByPath(fileLeftPath.value, fileRightPath.value)
+          : api.loadFilesUnifiedDiff(textLeftFile.value, textRightFile.value)
+        promise.then(function (text) {
           if (requestId !== diffRequestSeq.value) return
           diffLoading.value = false
           if (text && text.trim()) {
@@ -676,7 +734,7 @@
 
       function retryDiff() {
         if (!selectedPath.value) return
-        if (mode.value === 'file') loadFileDiff(fileLeftFile.value, fileRightFile.value)
+        if (mode.value === 'file' || mode.value === 'text') loadFileDiff()
         else loadUnifiedDiff(selectedPath.value)
       }
 
@@ -740,7 +798,7 @@
       watch(viewMode, function (v) {
         JarDiff.storage.set('viewMode', v)
         if (selectedPath.value) {
-          if (mode.value === 'file') loadFileDiff(fileLeftFile.value, fileRightFile.value)
+          if (mode.value === 'file' || mode.value === 'text') loadFileDiff()
           else loadUnifiedDiff(selectedPath.value)
         }
       })
@@ -752,17 +810,43 @@
           JarDiff.storage.set('setting.includeLib', setting.includeLib)
         })
 
+      // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
+      onMounted(function () {
+        JarDiff.api.getCapabilities().then(function (capabilities) {
+          directoryCompareEnabled.value = !!(capabilities && capabilities.directoryCompareEnabled === true)
+          if (directoryCompareEnabled.value && storedMode === 'dir' && JarDiff.storage.get('mode') === 'dir') {
+            mode.value = 'dir'
+          } else if (!directoryCompareEnabled.value && (mode.value === 'dir' || JarDiff.storage.get('mode') === 'dir')) {
+            switchMode('jar')
+          }
+        }).catch(function (err) {
+          console.error('load compare capabilities failed', err)
+          directoryCompareEnabled.value = false
+          if (mode.value === 'dir' || JarDiff.storage.get('mode') === 'dir') switchMode('jar')
+        })
+
+        // 用户未自定义过忽略规则时，用配置文件预置的默认规则填充输入框（界面可见、可直接改）
+        JarDiff.api.getLimits().then(function (lim) {
+          if (!ignoreGlobs.value && lim && lim.defaultIgnoreGlobs) {
+            ignoreGlobs.value = lim.defaultIgnoreGlobs
+          }
+        }).catch(function (err) {
+          console.error('load default ignore globs failed', err)
+        })
+      })
+      // [AGC:END]
+
       provide('expandedPaths', expandedPaths)
 
       // --- exposed ---
       return {
-        mode, modes, dirLeft, dirRight, ignoreGlobs, compareId, treeData, selectedPath,
+        mode, visibleModes, dirLeft, dirRight, textLeft, textRight, jarLeftPath, jarRightPath, fileLeftPath, fileRightPath, ignoreGlobs, compareId, treeData, selectedPath,
         diffHtml, diffLoading, diffError, navigationMode, viewMode, diffFontSize, pathCopied, diffFocus, searchQuery, statusFilter,
         structureFull, comparing, expandedPaths, leftWidth, showSettings, setting, stats, filteredTree,
-        changedFileCount, hunkCount, ignoreRuleCount, hunkIndex, compareLabel, nestedStates,
+        changedFileCount, hunkCount, ignoreRuleCount, canStartTextCompare, hunkIndex, compareLabel, nestedStates,
         switchMode, toggleScope, switchNavigationMode, adjustDiffFont, copySelectedPath, resetCompare, startCompare, selectFile, selectFileFromStruct, navigateHunk,
         loadFileDiff, expandNested, startResize, doResize, stopResize,
-        syncStructureScroll, retryDiff, onJarLeftChange, onJarRightChange, onFileLeftChange, onFileRightChange
+        syncStructureScroll, retryDiff, onChooseJarLeft, onChooseJarRight, onChooseFileLeft, onChooseFileRight, onChooseDirLeft, onChooseDirRight, baseName
       }
     }
   })

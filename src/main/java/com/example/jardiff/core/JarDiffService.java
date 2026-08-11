@@ -32,6 +32,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -53,11 +54,19 @@ public class JarDiffService {
               return t;
             }
           });
-  private static final long MAX_TEXT_DIFF_BYTES = 1024L * 1024L * 2L;
-  private static final long MAX_CLASS_DIFF_BYTES = 1024L * 1024L * 2L;
   private static final long MAX_NESTED_CONTAINER_BYTES = 1024L * 1024L * 50L;
-  private static final long MAX_NESTED_CLASS_INDEX_BYTES = 1024L * 1024L * 16L;
-  private static final long MAX_NESTED_EXTRACT_BYTES = 1024L * 1024L * 300L;
+
+  @Value("${jardiff.diff.max-text-bytes:2097152}")
+  private long maxTextDiffBytes = 2097152L;
+
+  @Value("${jardiff.diff.max-class-bytes:2097152}")
+  private long maxClassDiffBytes = 2097152L;
+
+  @Value("${jardiff.diff.max-nested-class-index-bytes:16777216}")
+  private long maxNestedClassIndexBytes = 16777216L;
+
+  @Value("${jardiff.diff.max-nested-extract-bytes:314572800}")
+  private long maxNestedExtractBytes = 314572800L;
 
   public JarDiffService(
       CompareStore compareStore,
@@ -274,7 +283,7 @@ public class JarDiffService {
     if (isClass(kindPath)) {
       long lb = leftBytes == null ? 0 : leftBytes.length;
       long rb = rightBytes == null ? 0 : rightBytes.length;
-      if (lb > MAX_CLASS_DIFF_BYTES || rb > MAX_CLASS_DIFF_BYTES) {
+      if (lb > maxClassDiffBytes || rb > maxClassDiffBytes) {
         out.setKind("binary");
         out.setMessage("class 文件过大，已跳过反编译差异（仅展示摘要）。");
         return out;
@@ -332,7 +341,7 @@ public class JarDiffService {
     if (looksText(kindPath)) {
       long lb = leftBytes == null ? 0 : leftBytes.length;
       long rb = rightBytes == null ? 0 : rightBytes.length;
-      if (lb > MAX_TEXT_DIFF_BYTES || rb > MAX_TEXT_DIFF_BYTES) {
+      if (lb > maxTextDiffBytes || rb > maxTextDiffBytes) {
         out.setKind("binary");
         out.setMessage("文本文件过大，已跳过逐行差异（仅展示摘要）。");
         return out;
@@ -548,7 +557,7 @@ public class JarDiffService {
         byte[] bytes = readAll(zis);
         if (isTarget) target = bytes;
         if (isClass && classes != null && bytes != null && bytes.length > 0) {
-          if (indexedBytes + bytes.length <= MAX_NESTED_CLASS_INDEX_BYTES) {
+          if (indexedBytes + bytes.length <= maxNestedClassIndexBytes) {
             classes.put(n, bytes);
             indexedBytes += bytes.length;
           }
@@ -715,7 +724,7 @@ public class JarDiffService {
         ZipEntry e = use.getEntry(normalize(outerEntry));
         if (e == null || e.isDirectory()) return null;
         long sz = e.getSize();
-        if (sz > 0 && sz > MAX_NESTED_EXTRACT_BYTES) return null;
+        if (sz > 0 && sz > maxNestedExtractBytes) return null;
         Path tmp = Files.createTempFile("jardiff_nested_", ".jar");
         try (InputStream in = use.getInputStream(e)) {
           Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING);

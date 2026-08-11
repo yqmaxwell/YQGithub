@@ -1,7 +1,4 @@
 ;(function () {
-  const DEFAULT_IGNORE_SPRINGBOOT =
-    'META-INF/*.SF\nMETA-INF/*.RSA\nMETA-INF/*.DSA\nMETA-INF/MANIFEST.MF\nBOOT-INF/classpath.idx\nBOOT-INF/layers.idx'
-
   function mapStatusBadge(status) {
     if (status === 'added') return { type: 'success', text: '新增' }
     if (status === 'missing') return { type: 'danger', text: '缺失' }
@@ -238,7 +235,6 @@
 
   window.JarDiff = window.JarDiff || {}
   window.JarDiff.core = {
-    DEFAULT_IGNORE_SPRINGBOOT,
     mapStatusBadge,
     mapStructureBadge,
     flattenChanged,
