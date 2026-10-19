@@ -1,0 +1,47 @@
+{
+  "name": "jar-diff-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jar 差异比对工具桌面外壳",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.9.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.example.jardiff",
+    "productName": "Jar Diff",
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../target",
+        "to": "app",
+        "filter": [
+          "jar-diff-tool-*.jar"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    }
+  }
+}

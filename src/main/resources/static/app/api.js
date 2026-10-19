@@ -147,26 +147,19 @@
     return await resp.text()
   }
 
-  // ===== 桌面工具原生文件选择器桥接（异步：FileChooser 在 JavaFX 线程弹，选定后回调 onChosen）=====
-  var chosenCallback = null
-  window.__jardiffOnChosen = function (path) {
-    if (chosenCallback) { var cb = chosenCallback; chosenCallback = null; cb(path) }
+  // ===== 桌面工具原生文件选择器桥接（由 Electron preload 暴露，返回 Promise）=====
+  function pickPath(method, title, onChosen) {
+    var bridge = window.jardiffBridge
+    if (!bridge || typeof bridge[method] !== 'function') { onChosen && onChosen(null); return }
+    Promise.resolve(bridge[method](title)).then(function (picked) {
+      onChosen && onChosen(picked || null)
+    }).catch(function () {
+      onChosen && onChosen(null)
+    })
   }
-  function chooseJar(title, onChosen) {
-    if (!window.jardiffBridge) { onChosen && onChosen(null); return }
-    chosenCallback = onChosen || null
-    window.jardiffBridge.chooseJar(title)
-  }
-  function chooseDirectory(title, onChosen) {
-    if (!window.jardiffBridge) { onChosen && onChosen(null); return }
-    chosenCallback = onChosen || null
-    window.jardiffBridge.chooseDirectory(title)
-  }
-  function chooseFile(title, onChosen) {
-    if (!window.jardiffBridge) { onChosen && onChosen(null); return }
-    chosenCallback = onChosen || null
-    window.jardiffBridge.chooseFile(title)
-  }
+  function chooseJar(title, onChosen) { pickPath('chooseJar', title, onChosen) }
+  function chooseDirectory(title, onChosen) { pickPath('chooseDirectory', title, onChosen) }
+  function chooseFile(title, onChosen) { pickPath('chooseFile', title, onChosen) }
 
   /** 按本地路径比对两个 jar（桌面工具用，替代上传）。 */
   async function compareJarsByPath(fd) {

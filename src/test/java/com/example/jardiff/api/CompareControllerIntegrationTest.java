@@ -121,6 +121,62 @@ public class CompareControllerIntegrationTest {
   }
 
   @Test
+  public void reportHtml_hasBalancedDivTags() throws Exception {
+    byte[] leftJar = buildJarWithText("BOOT-INF/classes/a.txt", "left\n");
+    byte[] rightJar = buildJarWithText("BOOT-INF/classes/a.txt", "right\n");
+
+    MockMultipartFile left = new MockMultipartFile("leftJar", "left.jar", "application/java-archive", leftJar);
+    MockMultipartFile right = new MockMultipartFile("rightJar", "right.jar", "application/java-archive", rightJar);
+
+    String compareResponse = mockMvc.perform(multipart("/api/compare/jars").file(left).file(right))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString();
+    String id = objectMapper.readTree(compareResponse).get("id").asText();
+
+    String html = mockMvc.perform(get("/api/compare/report.html").param("id", id))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString();
+
+    int open = countOccurrences(html, "<div");
+    int close = countOccurrences(html, "</div>");
+    if (open != close) {
+      throw new AssertionError("report html div tags unbalanced: open=" + open + " close=" + close);
+    }
+  }
+
+  @Test
+  public void compareFilesUnified_fallsBackToLatin1ForInvalidUtf8() throws Exception {
+    byte[] leftBytes = new byte[] {'c', 'a', 'f', (byte) 0xE9, '\n'};
+    byte[] rightBytes = new byte[] {'c', 'a', 'f', (byte) 0xE8, '\n'};
+
+    MockMultipartFile leftFile = new MockMultipartFile("left", "latin1.txt", "text/plain", leftBytes);
+    MockMultipartFile rightFile = new MockMultipartFile("right", "latin1.txt", "text/plain", rightBytes);
+
+    String body = mockMvc.perform(multipart("/api/compare/files/unified")
+            .file(leftFile).file(rightFile))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString(StandardCharsets.ISO_8859_1);
+
+    if (body.contains("\uFFFD")) {
+      throw new AssertionError("expected ISO-8859-1 fallback, but got replacement character: " + body);
+    }
+    if (!body.contains("caf\u00E9") || !body.contains("caf\u00E8")) {
+      throw new AssertionError("expected latin1 decoded text, got: " + body);
+    }
+  }
+
+  private int countOccurrences(String text, String needle) {
+    if (text == null || needle == null || needle.isEmpty()) return 0;
+    int count = 0;
+    int index = 0;
+    while ((index = text.indexOf(needle, index)) >= 0) {
+      count += 1;
+      index += needle.length();
+    }
+    return count;
+  }
+
+  @Test
   public void filesUnifiedDiff_returnsDiffForTextFiles() throws Exception {
     MockMultipartFile leftFile = new MockMultipartFile("left", "test.java",
         "text/plain", "line1\nline2\nline3\n".getBytes(StandardCharsets.UTF_8));

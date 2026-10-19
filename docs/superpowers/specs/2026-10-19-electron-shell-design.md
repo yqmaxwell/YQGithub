@@ -27,7 +27,7 @@
 | 加载地址与监听地址不匹配 | 绑定 `127.0.0.1`（`application.properties:3`），加载 `http://localhost:<port>/`（`JarDiffLauncher.java:88`） |
 | 前端只调用按路径比对的端点 | `app.js:563-626` 只用 `compareJarsByPath`、`compareDirectoryByPath`、`compareFilesByPath` |
 | 后端已具备完整上传端点 | `/api/compare/jars`、`/api/compare/directory`、`/api/compare/files` 均已实现，前端未接 |
-| 现有测试基线全绿 | `mvn -o test` 得 `Tests run: 24, Failures: 0, Errors: 0, Skipped: 0`，耗时 4.245 秒 |
+| 现有测试基线全绿 | `mvn -o test` 得 `Tests run: 24, Failures: 0, Errors: 0, Skipped: 0`，耗时 4.245 秒；实施后为 26 个 |
 | 本机有验证靶子 | `zulu-8.jdk`（OpenJDK 1.8.0_504，无 JavaFX）、`jdk-21.jdk` |
 | Node 构建链可用 | node v23.11.0、npm 10.9.2、pnpm |
 
@@ -45,14 +45,34 @@
 
 Vue 3 的响应式系统依赖 `new Proxy`。JavaFX 8 内置的 WebKit 大致相当于 Safari 7 至 8 时代，不支持 `Proxy`，Vue 无法初始化，`#app` 保持空节点。项目内没有任何 polyfill。
 
-### 判定方式
+### 判定方式与实施结论
 
-两条成因都表现为同一现象，需用一次实验区分：把加载地址改为 `http://127.0.0.1:<port>/`，重建产物后在 Windows 上运行。
+两条成因都表现为同一现象，判定方式是把加载地址改为 `http://127.0.0.1:<port>/`，重建产物后在 Windows 上运行：
 
 - 页面正常显示：成因一是主因，JavaFX 路线仍可维持。
 - 仍然空白：成因二是主因，JavaFX 路线不可维持。
 
-实验结论在实施阶段回填本节。无论结论如何，Electron 方案对两条成因都是根治，因为 Chromium 内核版本固定，且加载地址由主进程显式写成 `127.0.0.1`。
+地址修补已实施（`JarDiffLauncher` 的加载地址改为 `127.0.0.1`），产物已重建。Windows 侧实测由同事执行，结论待回填。
+
+无论 Windows 结论如何，Electron 方案对两条成因都是根治：Chromium 内核版本固定，且加载地址由主进程显式写成 `127.0.0.1`。实测已证明这一点——Electron 窗口内 `Vue.version` 为 `3.5.26`，`#app` 渲染出 2569 个字符的内容，不再是空节点。
+
+### 实测记录
+
+在 macOS 上用 Zulu 8（OpenJDK，无 JavaFX）验证：
+
+| 项目 | 结果 |
+|------|------|
+| 旧产物启动 | `NoClassDefFoundError: javafx/application/Application` |
+| 新产物启动 | `Tomcat started on port(s): 18099`，`Started JarDiffApplication in 1.292 seconds` |
+| 产物内 javafx 引用 | 0 |
+| 源码内 javafx 引用 | 0 |
+| Electron 拉起后端 | 解析到端口 53802 与 54078，`did-finish-load` 触发 |
+| 窗口内 Vue | `3.5.26`，`#app` 内容长度 2569 |
+| 桥接对象 | `chooseJar`、`chooseDirectory`、`chooseFile` 三个方法均在 |
+| 旧全局回调 | `__jardiffOnChosen` 已不存在 |
+| 全量测试 | 26 个通过，0 失败 |
+
+Electron 二进制经 `npmmirror.com` 镜像下载，缓存目录指向项目内 `.npm-cache/electron`（默认缓存目录在当前环境不可写）。
 
 ## 4. 方案取舍
 
@@ -216,7 +236,39 @@ unzip -l target/jar-diff-tool-1.0.0.jar | grep -c javafx        # 应为 0
   -jar target/jar-diff-tool-1.0.0.jar                            # 应正常启动
 ```
 
-## 10. 待办缺陷与优化清单
+## 10. 实施状态
+
+本次范围内的工作已全部完成。
+
+| 项目 | 状态 |
+|------|------|
+| 加载地址改为 `127.0.0.1` | 已实施 |
+| Electron 外壳（`desktop/package.json`、`main.js`、`preload.js`、`build/icon.png`） | 已实施 |
+| `api.js` 文件选择改为 Promise 契约 | 已实施，旧 `__jardiffOnChosen` 已移除 |
+| 删除 `JarDiffLauncher.java`、`FileBridge.java` | 已实施 |
+| `pom.xml` 的 `mainClass` 改为 `JarDiffApplication` | 已实施 |
+| 移除 `jardiff.port.probe-range` 死配置 | 已实施 |
+| `.gitignore` 追加桌面与缓存目录 | 已实施 |
+| 三项缺陷修复 | 已实施 |
+| 两个回归测试 | 已实施，全量 26 个通过 |
+
+### 遗留事项
+
+1. Windows 侧实测待同事执行，需要确认页面正常显示且关闭后无残留 java 进程。
+2. `desktop/main.js` 中渲染进程沙箱设为 `sandbox: true`。当前开发环境的文件沙箱导致 Chromium 沙箱无法初始化，本地验证时用 `--no-sandbox` 与 `--user-data-dir` 临时绕过，这两个参数未写入代码。正式运行环境不受此限制。
+3. Electron 二进制需经镜像下载。安装命令为：
+
+```bash
+cd desktop
+npm install --cache ../.npm-cache
+ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
+  electron_config_cache="$(cd .. && pwd)/.npm-cache/electron" \
+  node node_modules/electron/install.js
+```
+
+4. 打包分发（`npm run dist:mac` / `dist:win`）尚未执行，需要代码签名与公证后才能给他人使用。
+
+## 11. 待办缺陷与优化清单
 
 本次不实施，记录于此供后续独立处理。
 
@@ -242,7 +294,7 @@ unzip -l target/jar-diff-tool-1.0.0.jar | grep -c javafx        # 应为 0
 3. `matchesGlob` 只保留后端一份，前端通过接口获取匹配结果。
 4. `/api/compare/report.v2.json` 与预热接口补前端入口，或明确标为待废弃。
 
-## 11. 假设与依赖
+## 12. 假设与依赖
 
 1. Windows 验证依赖同事配合执行一次，这是唯一的跨平台人工环节。
 2. npm 可联网安装 `electron` 与 `electron-builder`。若网络不可达需改用内网镜像。
@@ -250,7 +302,7 @@ unzip -l target/jar-diff-tool-1.0.0.jar | grep -c javafx        # 应为 0
 4. macOS 上未做代码签名，分发给他人首次打开会触发 Gatekeeper 提示。正式分发需要签名与公证，本次不含。
 5. 现有 24 个测试全绿，作为回归基线。
 
-## 12. 回滚方式
+## 13. 回滚方式
 
 Electron 外壳是新增目录，JavaFX 两个文件在移除步骤才删除。若 Electron 方案不可行：恢复 `JarDiffLauncher.java` 与 `FileBridge.java`、把 `pom.xml` 的 `mainClass` 改回、移除 `desktop/`，即回到当前状态。
 

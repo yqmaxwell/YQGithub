@@ -81,7 +81,7 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <version>${spring-boot.version}</version>
         <configuration>
-          <mainClass>com.example.jardiff.JarDiffLauncher</mainClass>
+          <mainClass>com.example.jardiff.JarDiffApplication</mainClass>
         </configuration>
         <executions>
           <execution>

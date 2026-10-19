@@ -15,6 +15,7 @@ import com.example.jardiff.core.Stats;
 import com.example.jardiff.core.StoredCompare;
 import com.example.jardiff.core.TreeNode;
 import java.net.URLDecoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.DirectoryStream;
@@ -73,7 +74,6 @@ public class CompareController {
   // [AGC:START] tool=Cc date=2026-07-29 author=maxwell
   private final boolean directoryCompareEnabled;
   // [AGC:END]
-  private final Map<String, String> fileTextCache = new HashMap<>();
 
   public CompareController(
       JarCompareService jarCompareService,
@@ -572,8 +572,6 @@ public class CompareController {
       res.put("type", "text");
       res.put("decompiled", decompiled);
 
-      fileTextCache.put(id + ":left", leftText);
-      fileTextCache.put(id + ":right", rightText);
       log.info("[jarDiff][end] FuncName=CompareController.compareFiles, id={}, decompiled={}, leftLen={}, rightLen={}",
           id, decompiled, leftText != null ? leftText.length() : 0, rightText != null ? rightText.length() : 0);
     } catch (IOException e) {
@@ -644,8 +642,6 @@ public class CompareController {
       res.put("type", "text");
       res.put("decompiled", decompiled);
 
-      fileTextCache.put(id + ":left", leftText);
-      fileTextCache.put(id + ":right", rightText);
       log.info("[jarDiff][end] FuncName=CompareController.compareFilesByPath, id={}, decompiled={}, leftLen={}, rightLen={}",
           id, decompiled, leftText != null ? leftText.length() : 0, rightText != null ? rightText.length() : 0);
     } catch (IOException e) {
@@ -689,7 +685,10 @@ public class CompareController {
       return procyonDecompileService.decompileToText(bytes);
     }
     if (isLikelyTextFile(name)) {
-      return new String(bytes, StandardCharsets.UTF_8);
+      String utf8 = new String(bytes, StandardCharsets.UTF_8);
+      // 与 JarCompareService、JarDiffService 的 toText 保持一致：非 UTF-8 内容回退到 ISO-8859-1
+      if (utf8.contains("\uFFFD")) return new String(bytes, Charset.forName("ISO-8859-1"));
+      return utf8;
     }
     return null;
   }
@@ -836,7 +835,7 @@ public class CompareController {
     sb.append("</div>");
 
     sb.append("<div class=\"card\"><h2 style=\"font-size:15px;margin:0 0 8px\">变化文件</h2>");
-    sb.append("<div style=\"font-size:12px;color:#6b7280;margin:6px 0 10px\">按应用/依赖分段展示；内嵌依赖文件以容器 jar 聚合</div>");
+    sb.append("<div style=\"font-size:12px;color:#6b7280;margin:6px 0 10px\">按应用/依赖分段展示；内嵌依赖文件以容器 jar 聚合</div></div>");
     List<ChangedRow> changed = collectChanged(r == null ? null : r.getTree());
     ReportGroups groups = buildGroups(changed);
     List<DependencyRow> deps = buildDependencyRows(changed);

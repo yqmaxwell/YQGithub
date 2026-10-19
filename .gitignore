@@ -9,3 +9,7 @@ logs/
 META-INF/
 CLAUDE.md
 *.log
+.codegraph/
+.npm-cache/
+desktop/node_modules/
+desktop/dist/
