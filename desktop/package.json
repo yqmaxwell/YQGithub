@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Jar 差异比对工具桌面外壳",
+  "author": "Jar Diff Tool",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

@@ -12,12 +12,18 @@ let backendPort = 0
 let quitting = false
 
 // 打包后 jar 位于 resources/app 下，开发时直接用 target 目录
+function findJar(dir) {
+  if (!fs.existsSync(dir)) return null
+  const name = fs.readdirSync(dir).find((it) => /^jar-diff-tool-.*\.jar$/.test(it))
+  return name ? path.join(dir, name) : null
+}
+
 function resolveJarPath() {
-  const packaged = path.join(process.resourcesPath, 'app', 'jar-diff-tool-1.0.0.jar')
-  if (app.isPackaged && fs.existsSync(packaged)) return packaged
-  const dev = path.resolve(__dirname, '..', 'target', 'jar-diff-tool-1.0.0.jar')
-  if (fs.existsSync(dev)) return dev
-  return null
+  if (app.isPackaged) {
+    const packaged = findJar(path.join(process.resourcesPath, 'app'))
+    if (packaged) return packaged
+  }
+  return findJar(path.resolve(__dirname, '..', 'target'))
 }
 
 // GUI 应用不继承 shell 的 PATH，macOS 需要经 java_home 查找

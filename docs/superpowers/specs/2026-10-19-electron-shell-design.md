@@ -251,12 +251,38 @@ unzip -l target/jar-diff-tool-1.0.0.jar | grep -c javafx        # 应为 0
 | `.gitignore` 追加桌面与缓存目录 | 已实施 |
 | 三项缺陷修复 | 已实施 |
 | 两个回归测试 | 已实施，全量 26 个通过 |
+| macOS 应用包构建 | 已实施，`desktop/dist/mac-arm64/Jar Diff.app` |
+| macOS 压缩分发件 | 已实施，`desktop/dist/Jar Diff-1.0.0-arm64-mac.zip` |
+
+### 应用包实测
+
+应用包结构为标准的 macOS bundle：
+
+| 路径 | 内容 |
+|------|------|
+| `Contents/MacOS/Jar Diff` | 主可执行文件，`Mach-O 64-bit executable arm64` |
+| `Contents/Resources/app.asar` | 外壳代码，内含 `main.js`、`preload.js`、`package.json`、`build/icon.png` |
+| `Contents/Resources/app/jar-diff-tool-1.0.0.jar` | 后端程序包，与 `target/` 下产物 SHA-256 一致 |
+| `Contents/Resources/icon.icns` | 由 `build/icon.png` 转换 |
+| `Contents/Frameworks/` | Electron Framework、三个 Helper 与 Mantle、ReactiveObjC |
+
+验证结果：
+
+| 验证项 | 结果 |
+|--------|------|
+| 解压分发件后启动 | `Tomcat started on port(s): 53092` |
+| `open` 双击启动 | 进程存在，Java 子进程监听 `127.0.0.1:52513` |
+| 页面标题 | `Jar 版本差异比对` |
+| `/api/ping` | `ok` |
+| 主进程收到 `SIGTERM` | Java 子进程同步退出，端口释放 |
+| 最小环境启动（`env -i`，无 `JAVA_HOME`） | 经 `/usr/libexec/java_home` 找到 JDK 21 并正常启动 |
+| 同一进程内 Vue 与桥接 | `vue=3.5.26`，`bridge=chooseJar,chooseDirectory,chooseFile` |
 
 ### 遗留事项
 
 1. Windows 侧实测待同事执行，需要确认页面正常显示且关闭后无残留 java 进程。
 2. `desktop/main.js` 中渲染进程沙箱设为 `sandbox: true`。当前开发环境的文件沙箱导致 Chromium 沙箱无法初始化，本地验证时用 `--no-sandbox` 与 `--user-data-dir` 临时绕过，这两个参数未写入代码。正式运行环境不受此限制。
-3. Electron 二进制需经镜像下载。安装命令为：
+3. Electron 二进制与构建工具需经镜像与项目内缓存下载。安装与构建命令为：
 
 ```bash
 cd desktop
@@ -264,9 +290,17 @@ npm install --cache ../.npm-cache
 ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
   electron_config_cache="$(cd .. && pwd)/.npm-cache/electron" \
   node node_modules/electron/install.js
+
+CSC_IDENTITY_AUTO_DISCOVERY=false \
+  ELECTRON_BUILDER_CACHE="$(cd .. && pwd)/.npm-cache/electron-builder" \
+  ./node_modules/.bin/electron-builder --mac zip \
+  -c.electronDist=node_modules/electron/dist --publish never
 ```
 
-4. 打包分发（`npm run dist:mac` / `dist:win`）尚未执行，需要代码签名与公证后才能给他人使用。
+`-c.electronDist` 指向已解包的 `node_modules/electron/dist`，跳过重复下载。DMG 目标依赖 `hdiutil`，在当前文件沙箱下返回“操作不被允许”，需在沙箱外执行 `--mac dmg`。
+
+4. 应用包未签名。首次打开会触发 Gatekeeper 拦截，需要右键打开或执行 `xattr -dr com.apple.quarantine`。给他人分发前需要代码签名与公证。
+5. 主进程被 `SIGKILL` 强杀时 Java 子进程会残留。正常退出路径（关闭窗口、`Cmd+Q`、`SIGTERM`）会同步终止子进程。
 
 ## 11. 待办缺陷与优化清单
 
