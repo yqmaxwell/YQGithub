@@ -9,7 +9,7 @@
 ## 技术栈
 
 - Java 8, Spring Boot 2.7.18
-- ASM 9.6（字节码分析）、Procyon 0.5.36（反编译器）、java-diff-utils 4.12
+- ASM 9.6（字节码分析）、Procyon 0.6.0（反编译器）、java-diff-utils 4.12
 - Maven 构建
 - Vue 3 + Element Plus 前端（作为静态资源由 Spring Boot 提供）
 - Electron 44 桌面外壳（`desktop/` 目录，Node.js 构建）

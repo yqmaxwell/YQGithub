@@ -47,8 +47,13 @@ public class CompareStore {
       compare.closeQuietly();
       throw e;
     }
-    long currentBytes = currentResourceBytes();
-    if (store.size() >= maxSessions || incomingBytes > maxBytes - currentBytes) {
+    if (incomingBytes > maxBytes) {
+      compare.closeQuietly();
+      throw new CapacityExceededException(
+          "compare exceeds byte limit: incoming=" + incomingBytes + ", bytes=" + maxBytes);
+    }
+    evictUntilFits(incomingBytes);
+    if (store.size() >= maxSessions || incomingBytes > maxBytes - currentResourceBytes()) {
       compare.closeQuietly();
       throw new CapacityExceededException(
           "compare resource limit exceeded: sessions=" + maxSessions + ", bytes=" + maxBytes);
@@ -57,6 +62,24 @@ public class CompareStore {
     store.put(id, compare);
     log.info("compare store put id={} size={}", id, store.size());
     return id;
+  }
+
+  /** 按最久未访问顺序淘汰旧会话，为新的比对腾出会话数与字节配额。 */
+  private void evictUntilFits(long incomingBytes) {
+    while (store.size() >= maxSessions || incomingBytes > maxBytes - currentResourceBytes()) {
+      Map.Entry<String, StoredCompare> oldest = null;
+      for (Map.Entry<String, StoredCompare> e : store.entrySet()) {
+        if (oldest == null || e.getValue().getLastAccessAt().isBefore(oldest.getValue().getLastAccessAt())) {
+          oldest = e;
+        }
+      }
+      if (oldest == null) {
+        return;
+      }
+      store.remove(oldest.getKey());
+      oldest.getValue().closeQuietly();
+      log.info("compare store evicted id={} size={}", oldest.getKey(), store.size());
+    }
   }
 
   public synchronized Optional<StoredCompare> get(String id) {
@@ -68,7 +91,17 @@ public class CompareStore {
       log.info("compare store expired id={}", id);
       return Optional.empty();
     }
+    v.touch();
     return Optional.of(v);
+  }
+
+  /** 比对在建树阶段失败时撤销刚登记的会话，避免失败请求占用配额。 */
+  public synchronized void remove(String id) {
+    StoredCompare v = store.remove(id);
+    if (v != null) {
+      v.closeQuietly();
+      log.info("compare store remove id={} size={}", id, store.size());
+    }
   }
 
   @Scheduled(fixedDelayString = "${jardiff.limits.session-cleanup-interval-ms:60000}")

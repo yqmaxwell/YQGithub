@@ -83,7 +83,8 @@ public class JarCompareService {
           safeName(rightJar),
           leftJar.getSize(),
           rightJar.getSize(),
-          options);
+          options,
+          true);
     } catch (IOException e) {
       if (leftPath != null) safeDelete(leftPath);
       if (rightPath != null) safeDelete(rightPath);
@@ -105,7 +106,7 @@ public class JarCompareService {
       String rightName = rightJar.getFileName() != null ? rightJar.getFileName().toString() : rightJar.toString();
       long leftSize = Files.size(leftJar);
       long rightSize = Files.size(rightJar);
-      return compareByJarPath(leftJar, rightJar, leftName, rightName, leftSize, rightSize, options);
+      return compareByJarPath(leftJar, rightJar, leftName, rightName, leftSize, rightSize, options, false);
     } catch (IOException e) {
       log.error("compareJarsByPath failed leftJar={} rightJar={}", leftJar, rightJar, e);
       throw new RuntimeException("compare failed: " + e.getMessage(), e);
@@ -115,6 +116,7 @@ public class JarCompareService {
   /**
    * 两个已就绪的 jar 文件路径（zip 结构）的公共比对逻辑：建元数据、入会话、建索引、对齐树。
    * 由 {@link #compare}（上传版，前置 saveTemp）和 {@link #compareJarsByPath}（本地路径版）共用。
+   * @param jarFilesOwned 两侧路径是否为本进程创建的临时文件；本地路径比对传 false，避免会话回收删除用户文件
    */
   private CompareResult compareByJarPath(
       Path leftPath,
@@ -123,7 +125,8 @@ public class JarCompareService {
       String rightName,
       long leftSize,
       long rightSize,
-      CompareOptions options)
+      CompareOptions options,
+      boolean jarFilesOwned)
       throws IOException {
     log.info(
         "compare start leftName={} leftSize={} rightName={} rightSize={} includeLib={} includeClasses={} includeResources={} deepCompareLib={} ignoreGlobs={}",
@@ -140,18 +143,22 @@ public class JarCompareService {
     FileMeta leftMeta = new FileMeta(leftName, leftSize, digestService.md5(leftPath));
     FileMeta rightMeta = new FileMeta(rightName, rightSize, digestService.md5(rightPath));
 
-    StoredCompare stored = new StoredCompare(leftPath, rightPath, options, Instant.now());
+    StoredCompare stored = new StoredCompare(leftPath, rightPath, options, Instant.now(), jarFilesOwned);
     String id = compareStore.put(stored);
-
-    CompareIndex leftIndex = buildIndex(leftPath, options);
-    CompareIndex rightIndex = buildIndex(rightPath, options);
-
-    CompareResultWithStats built = buildAlignedTree(leftIndex, rightIndex, options);
-    CompareResult result = new CompareResult(id, leftMeta, rightMeta, built.tree, built.stats);
+    CompareResultWithStats built;
+    try {
+      CompareIndex leftIndex = buildIndex(leftPath, options);
+      CompareIndex rightIndex = buildIndex(rightPath, options);
+      built = buildAlignedTree(leftIndex, rightIndex, options);
+    } catch (IOException | RuntimeException e) {
+      compareStore.remove(id);
+      throw e;
+    }
     stored.setLeftMeta(leftMeta);
     stored.setRightMeta(rightMeta);
     stored.setTree(built.tree);
     stored.setStats(built.stats);
+    CompareResult result = new CompareResult(id, leftMeta, rightMeta, built.tree, built.stats);
     log.info(
         "compare done id={} added={} missing={} modified={} unchanged={}",
         id,

@@ -11,8 +11,10 @@ import java.util.Map;
 public class StoredCompare {
   private final Path leftJarPath;
   private final Path rightJarPath;
+  private final boolean jarFilesOwned;
   private final CompareOptions options;
   private final Instant createdAt;
+  private volatile Instant lastAccessAt;
   private volatile FileMeta leftMeta;
   private volatile FileMeta rightMeta;
   private volatile List<TreeNode> tree;
@@ -22,10 +24,21 @@ public class StoredCompare {
   private final WarmupStatus warmupStatus = new WarmupStatus();
 
   public StoredCompare(Path leftJarPath, Path rightJarPath, CompareOptions options, Instant createdAt) {
+    this(leftJarPath, rightJarPath, options, createdAt, true);
+  }
+
+  /**
+   * @param jarFilesOwned 两侧 jar 路径是否由本进程创建的临时文件。按本地路径比对时传入 false，
+   *     确保会话回收（淘汰、过期、超限拒绝）不会删除用户磁盘上的原始 jar。
+   */
+  public StoredCompare(
+      Path leftJarPath, Path rightJarPath, CompareOptions options, Instant createdAt, boolean jarFilesOwned) {
     this.leftJarPath = leftJarPath;
     this.rightJarPath = rightJarPath;
     this.options = options;
     this.createdAt = createdAt;
+    this.lastAccessAt = createdAt;
+    this.jarFilesOwned = jarFilesOwned;
   }
 
   public Path getLeftJarPath() {
@@ -42,6 +55,14 @@ public class StoredCompare {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public Instant getLastAccessAt() {
+    return lastAccessAt;
+  }
+
+  public void touch() {
+    this.lastAccessAt = Instant.now();
   }
 
   public FileMeta getLeftMeta() {
@@ -140,13 +161,15 @@ public class StoredCompare {
   }
 
   public void closeQuietly() {
-    try {
-      if (leftJarPath != null) Files.deleteIfExists(leftJarPath);
-    } catch (IOException ignored) {
-    }
-    try {
-      if (rightJarPath != null) Files.deleteIfExists(rightJarPath);
-    } catch (IOException ignored) {
+    if (jarFilesOwned) {
+      try {
+        if (leftJarPath != null) Files.deleteIfExists(leftJarPath);
+      } catch (IOException ignored) {
+      }
+      try {
+        if (rightJarPath != null) Files.deleteIfExists(rightJarPath);
+      } catch (IOException ignored) {
+      }
     }
     for (Path p : extractedCache.values()) {
       try {

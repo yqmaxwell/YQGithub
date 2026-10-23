@@ -2,7 +2,6 @@ package com.example.jardiff.core;
 
 // [AGC:FILE] tool=Cc author=maxwell date=2026-07-27
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,33 +11,24 @@ import org.junit.jupiter.api.Test;
 
 public class CompareStoreTest {
   @Test
-  public void putRejectsSessionLimitAndClosesRejectedResources() throws Exception {
-    CompareStore store = new CompareStore(1, 1024);
-    Path firstLeft = Files.createTempFile("compare-store-first-left", ".jar");
-    Path firstRight = Files.createTempFile("compare-store-first-right", ".jar");
-    Path rejectedLeft = Files.createTempFile("compare-store-rejected-left", ".jar");
-    Path rejectedRight = Files.createTempFile("compare-store-rejected-right", ".jar");
-    Files.write(firstLeft, new byte[] {1});
-    Files.write(firstRight, new byte[] {1});
-    Files.write(rejectedLeft, new byte[] {2});
-    Files.write(rejectedRight, new byte[] {2});
+  public void putRejectsSingleCompareLargerThanByteLimit() throws Exception {
+    CompareStore store = new CompareStore(4, 8);
+    Path left = Files.createTempFile("compare-store-left", ".jar");
+    Path right = Files.createTempFile("compare-store-right", ".jar");
+    Files.write(left, new byte[] {1, 2, 3, 4, 5, 6});
+    Files.write(right, new byte[] {1, 2, 3, 4, 5, 6});
 
-    StoredCompare first = new StoredCompare(firstLeft, firstRight, new CompareOptions(false, false, false, false),
-        java.time.Instant.now());
-    StoredCompare rejected = new StoredCompare(rejectedLeft, rejectedRight,
-        new CompareOptions(false, false, false, false), java.time.Instant.now());
+    StoredCompare oversized = new StoredCompare(left, right, new CompareOptions(false, false, false, false),
+        java.time.Instant.now(), false);
     try {
-      String id = store.put(first);
-      assertTrue(store.get(id).isPresent());
-
-      assertThrows(CompareStore.CapacityExceededException.class, () -> store.put(rejected));
-      assertTrue(store.get(id).isPresent());
-      assertFalse(Files.exists(rejectedLeft));
-      assertFalse(Files.exists(rejectedRight));
+      CompareStore.CapacityExceededException thrown =
+          assertThrows(CompareStore.CapacityExceededException.class, () -> store.put(oversized));
+      assertTrue(thrown.getMessage().contains("byte limit"));
+      assertTrue(Files.exists(left), "拒绝时不得删除用户 jar");
+      assertTrue(Files.exists(right), "拒绝时不得删除用户 jar");
     } finally {
-      first.closeQuietly();
-      Files.deleteIfExists(rejectedLeft);
-      Files.deleteIfExists(rejectedRight);
+      Files.deleteIfExists(left);
+      Files.deleteIfExists(right);
     }
   }
 }

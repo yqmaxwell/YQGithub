@@ -314,7 +314,6 @@ CSC_IDENTITY_AUTO_DISCOVERY=false \
 | `JarCompareService.java:368-410` | 上传版目录打包未套用忽略规则，路径版在 `:446` 有 | 两种入口的统计与体积上限口径不同 |
 | `StoredCompare.java:133-140` | 内嵌 jar 淘汰取 `ConcurrentHashMap` 任意一项，不是 LRU | 热点 jar 可能被反复提取，性能抖动 |
 | `StoredCompare.java:20` | `diffCache` 无容量上限与淘汰 | 全量预热后内存持续占用 |
-| `CompareStore.java:51-55` | 会话超限直接拒绝，不做淘汰 | 连续第 5 次比对需等 30 分钟 TTL 或重启 |
 | `app.js:670-698` 与 `core.js:114` | 后端返回的 `rows`、`highlights`、`hunks` 前端完全不消费，`buildDiffRows` 无人调用 | 后端计算浪费；变更块导航改为从 DOM 反推 |
 | `api.js:192-215` | 8 个导出方法在 `app.js` 中无调用点 | 上传版比对、预热、报告功能没有界面入口 |
 | `app.js:204` | `v-html` 注入 diff2html 生成的 HTML | 恶意 jar 的反编译内容可能注入脚本；Electron 下虽有上下文隔离，仍建议加 CSP |
@@ -323,10 +322,9 @@ CSC_IDENTITY_AUTO_DISCOVERY=false \
 
 优化方向：
 
-1. `CompareStore` 默认会话数由 4 提到 16 左右，并加入按最久未使用淘汰。
-2. 前端改回消费后端已有的结构化差异，移除对 diff2html 的依赖，变更块导航基于 `hunks`。
-3. `matchesGlob` 只保留后端一份，前端通过接口获取匹配结果。
-4. `/api/compare/report.v2.json` 与预热接口补前端入口，或明确标为待废弃。
+1. 前端改回消费后端已有的结构化差异，移除对 diff2html 的依赖，变更块导航基于 `hunks`。
+2. `matchesGlob` 只保留后端一份，前端通过接口获取匹配结果。
+3. `/api/compare/report.v2.json` 与预热接口补前端入口，或明确标为待废弃。
 
 ## 12. 假设与依赖
 
